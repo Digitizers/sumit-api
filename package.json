@@ -1,0 +1,51 @@
+{
+  "name": "@digitizers/sumit-api",
+  "version": "0.1.0",
+  "description": "TypeScript helpers for SUMIT/OfficeGuy/Upay recurring charges and trigger webhooks.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Digitizers/sumit-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Digitizers/sumit-api/issues"
+  },
+  "homepage": "https://github.com/Digitizers/sumit-api#readme",
+  "keywords": [
+    "sumit",
+    "officeguy",
+    "upay",
+    "billing",
+    "payments",
+    "recurring",
+    "webhooks",
+    "typescript"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.35",
+    "typescript": "^5",
+    "vitest": "^4.0.18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
