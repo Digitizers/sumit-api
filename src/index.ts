@@ -87,7 +87,7 @@ export interface NormalizedSumitEvent {
 
 type UnknownRecord = Record<string, unknown>;
 
-const SENSITIVE_KEY_PATTERN = /(^|_)(api(public)?key|singleusetoken|token|authorization|secret|password|cvv|citizenid|card(mask|pattern|token|expiration)?|cardowner(name|socialid)?|creditcard(_.*)?|authnumber|emailaddress|phone|resultrecord|documentdownloadurl)$/i;
+const SENSITIVE_KEY_PATTERN = /(^|_)(api(public)?key|singleusetoken|token|authorization|secret|password|cvv|citizenid|card(mask|pattern|token|expiration)?|cardowner(name|socialid)?|creditcard(_.*)?|directdebit(_.*)?|authnumber|emailaddress|phone|resultrecord|documentdownloadurl)$/i;
 
 export function currencyToSumitCode(currency: SumitCurrency): 0 | 1 | 2 {
   if (currency === 0 || currency === "ILS") return 0;

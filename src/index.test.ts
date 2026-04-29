@@ -164,6 +164,20 @@ describe("@deepclaw/sumit", () => {
     expect(result.recurringItemId).toBe("444");
   });
 
+  it("redacts DirectDebit_* bank fields", () => {
+    const redacted = redactSumitPayload({
+      PaymentMethod: {
+        DirectDebit_Bank: 12,
+        DirectDebit_Branch: 567,
+        DirectDebit_Account: 123456,
+      },
+    }) as { PaymentMethod: Record<string, string> };
+
+    expect(redacted.PaymentMethod.DirectDebit_Bank).toBe("[REDACTED]");
+    expect(redacted.PaymentMethod.DirectDebit_Branch).toBe("[REDACTED]");
+    expect(redacted.PaymentMethod.DirectDebit_Account).toBe("[REDACTED]");
+  });
+
   it("redacts CardOwnerSocialId, 9-digit national IDs, and Upay_* error codes", () => {
     const redacted = redactSumitPayload({
       Payment: {
