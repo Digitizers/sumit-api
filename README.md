@@ -2,6 +2,8 @@
 
 TypeScript helpers for integrating with SUMIT / OfficeGuy / Upay billing flows.
 
+> See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for a summary of the SUMIT endpoints, payload shapes, and webhook handling that this package targets. Official sources: [REST portal](https://app.sumit.co.il/developers/api/) · [Swagger explorer](https://app.sumit.co.il/help/developers/swagger/index.html).
+
 This package intentionally focuses on provider-specific pure logic that can be reused across apps:
 
 - Build `/billing/recurring/charge/` request payloads.
