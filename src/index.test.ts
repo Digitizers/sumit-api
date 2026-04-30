@@ -146,6 +146,49 @@ describe("@deepclaw/sumit", () => {
     });
   });
 
+  it("extracts reconciliation fields from real SUMIT view-shaped trigger payloads", () => {
+    const triggerPayload = {
+      Folder: 10,
+      EntityID: 20,
+      Type: "Create",
+      Properties: {
+        Property_2: ["2026-04-30T03:01:25+03:00"],
+        Billing_Amount: [1.18],
+        Property_3: [{ ID: 30, Name: "DeepClaw", Version: 3, Status: 0, SchemaID: 300 }],
+        Property_4: [{ ID: 40, Name: "DeepClaw Webhook Smoke", Version: 0, Status: 0, SchemaID: 400 }],
+        Billing_PaymentMethod: [{ ID: 50, Name: "כרטיס אשראי (9999)", Version: 0, Status: 0, SchemaID: 500 }],
+        Property_5: [{ ID: 60, Name: "חשבונית מס/קבלה / 10001", Version: 1, Status: 0, SchemaID: 600 }],
+        Property_6: ["customer@example.invalid"],
+      },
+    };
+    const result = normalizeSumitIncomingPayload(triggerPayload);
+
+    expect(result).toMatchObject({
+      ok: null,
+      eventType: "sumit.trigger.unmapped",
+      paymentId: "20",
+      customerId: "30",
+      documentId: "60",
+      amount: 1.18,
+      status: "Create",
+      occurredAt: "2026-04-30T03:01:25+03:00",
+    });
+    expect(result.diagnostic).toMatchObject({
+      hasData: true,
+      dataKeys: ["EntityID", "Folder", "Properties", "Type"],
+      hasCustomerID: true,
+      recurringItemCount: 0,
+    });
+
+    const formResult = normalizeSumitIncomingPayload(new URLSearchParams({ json: JSON.stringify(triggerPayload) }));
+    expect(formResult).toMatchObject({
+      eventType: "sumit.trigger.unmapped",
+      paymentId: "20",
+      documentId: "60",
+      amount: 1.18,
+    });
+  });
+
   it("redacts sensitive provider/payment data recursively", () => {
     const redacted = redactSumitPayload({
       SingleUseToken: "secret-token",
@@ -155,6 +198,7 @@ describe("@deepclaw/sumit", () => {
         CreditCard_LastDigits: "1234",
         Status: "000",
       },
+      PaymentMethod: { Name: "כרטיס אשראי (9999)" },
       EmailAddress: "billing@example.invalid",
     });
 
@@ -162,6 +206,7 @@ describe("@deepclaw/sumit", () => {
     expect(JSON.stringify(redacted)).not.toContain("secret-api-key");
     expect(JSON.stringify(redacted)).not.toContain("card-token");
     expect(JSON.stringify(redacted)).not.toContain("billing@example.invalid");
+    expect(JSON.stringify(redacted)).not.toContain("9999");
     expect(redacted).toMatchObject({
       SingleUseToken: "[REDACTED]",
       Credentials: { APIKey: "[REDACTED]", CompanyID: 123 },
@@ -170,6 +215,7 @@ describe("@deepclaw/sumit", () => {
         CreditCard_LastDigits: "[REDACTED]",
         Status: "000",
       },
+      PaymentMethod: { Name: "כרטיס אשראי ([REDACTED])" },
       EmailAddress: "[REDACTED]",
     });
   });

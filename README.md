@@ -82,6 +82,17 @@ if (normalized.eventType === "sumit.trigger.unmapped") {
 
 SUMIT Trigger webhooks are often view/card based and may not include a fixed provider event schema. This package does not assume Stripe-style lifecycle events.
 
+For SUMIT view-shaped trigger payloads with top-level `Folder`, `EntityID`, `Type`, and `Properties`, normalization extracts safe reconciliation fields when present:
+
+- `paymentId` from `EntityID`
+- `customerId` from `Properties.Property_3[0].ID`
+- `documentId` from `Properties.Property_5[0].ID`
+- `amount` from `Properties.Billing_Amount[0]`
+- `status` from `Type`
+- `occurredAt` from `Properties.Property_2[0]`
+
+These events still normalize as `sumit.trigger.unmapped` unless the application explicitly authenticates and maps them to a trusted billing lifecycle event.
+
 ## Safety
 
 Never log or persist raw provider payloads. Use `redactSumitPayload` or store only the safe normalized fields.

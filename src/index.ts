@@ -138,7 +138,7 @@ export function buildRecurringChargePayload(params: BuildRecurringChargePayloadP
 }
 
 export function normalizeSumitIncomingPayload(payload: unknown): NormalizedSumitEvent {
-  const objectPayload = payload instanceof URLSearchParams ? formToNestedObject(payload) : payload;
+  const objectPayload = unwrapSumitJsonEnvelope(payload instanceof URLSearchParams ? formToNestedObject(payload) : payload);
   return normalizeRecurringChargeResponse(objectPayload);
 }
 
@@ -146,6 +146,9 @@ export function normalizeRecurringChargeResponse(response: unknown): NormalizedS
   if (!isRecord(response)) {
     return unmappedDiagnostic(null);
   }
+
+  const viewTrigger = normalizeViewShapedTrigger(response);
+  if (viewTrigger) return viewTrigger;
 
   const explicitEventType = normalizeKnownEventType(response.EventType);
   if (explicitEventType) {
@@ -235,6 +238,7 @@ function redactValue(value: unknown, key = ""): unknown {
 export function redactSensitiveText(value: string): string {
   return value
     .replace(/[\w.+-]+@[\w.-]+/g, "[REDACTED]")
+    .replace(/(כרטיס\s+אשראי|credit\s+card)\s*\(\s*\d{4}\s*\)/gi, "$1 ([REDACTED])")
     .replace(/(singleuse)?token\s*[:=]\s*[^\s;,]+/gi, "$1token=[REDACTED]")
     .replace(/api\s*key\s*[:=]\s*[^\s;,]+/gi, "api key=[REDACTED]")
     .replace(/card(number)?\s*[:=]\s*[^\s;,]+/gi, "card$1=[REDACTED]")
@@ -247,6 +251,45 @@ function normalizeKnownEventType(value: unknown): Exclude<SumitNormalizedEventTy
     return value;
   }
   return undefined;
+}
+
+function unwrapSumitJsonEnvelope(payload: unknown): unknown {
+  if (!isRecord(payload)) return payload;
+  const jsonValue = payload.json ?? payload.JSON;
+  if (typeof jsonValue !== "string") return payload;
+  try {
+    return JSON.parse(jsonValue) as unknown;
+  } catch {
+    return payload;
+  }
+}
+
+function normalizeViewShapedTrigger(response: UnknownRecord): NormalizedSumitEvent | undefined {
+  if (!("Folder" in response) || !("EntityID" in response) || !("Type" in response) || !isRecord(response.Properties)) {
+    return undefined;
+  }
+
+  const properties = response.Properties;
+  const customer = firstRecord(properties.Property_3);
+  const document = firstRecord(properties.Property_5);
+  const paymentId = stringValue(response.EntityID);
+  const customerId = stringValue(customer?.ID);
+  const documentId = stringValue(document?.ID);
+  const amount = firstNumber(properties.Billing_Amount);
+  const occurredAt = firstScalarString(properties.Property_2);
+  const status = stringValue(response.Type);
+
+  return compact({
+    ok: null,
+    eventType: "sumit.trigger.unmapped" as const,
+    paymentId,
+    customerId,
+    documentId,
+    amount,
+    status,
+    occurredAt,
+    diagnostic: diagnosticFor(response),
+  });
 }
 
 function formToNestedObject(form: URLSearchParams): UnknownRecord {
@@ -293,7 +336,8 @@ function isFailedStatus({
 function diagnosticFor(response: UnknownRecord | null): SumitDiagnostic {
   const data = response ? getRecord(response.Data) : null;
   const base = response && "Data" in response ? data : response;
-  const customerId = data?.CustomerID ?? response?.CustomerID ?? getRecord(response?.Payment)?.CustomerID;
+  const properties = response ? getRecord(response.Properties) : undefined;
+  const customerId = data?.CustomerID ?? response?.CustomerID ?? getRecord(response?.Payment)?.CustomerID ?? firstRecord(properties?.Property_3)?.ID;
   const recurringItems = [response?.RecurringCustomerItemIDs, data?.RecurringCustomerItemIDs].find(Array.isArray) as unknown[] | undefined;
   return {
     hasData: base != null,
@@ -355,4 +399,19 @@ function firstString(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   const first = value[0];
   return first == null ? undefined : String(first);
+}
+
+function firstRecord(value: unknown): UnknownRecord | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return getRecord(value[0]);
+}
+
+function firstNumber(value: unknown): number | undefined {
+  if (!Array.isArray(value)) return numberValue(value);
+  return numberValue(value[0]);
+}
+
+function firstScalarString(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return stringValue(value);
+  return stringValue(value[0]);
 }
