@@ -100,14 +100,14 @@ describe("@deepclaw/sumit", () => {
       eventType: "payment.failed",
       status: "Failed",
       userErrorMessage: "Payment failed",
-      technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד Upay_30001419)",
+      technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד [REDACTED])",
       diagnostic: {
         hasData: false,
         dataKeys: [],
         hasCustomerID: false,
         recurringItemCount: 0,
         userErrorMessage: "Payment failed",
-        technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד Upay_30001419)",
+        technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד [REDACTED])",
       },
     });
   });
@@ -144,6 +144,24 @@ describe("@deepclaw/sumit", () => {
         recurringItemCount: 0,
       },
     });
+  });
+
+  it("preserves leading-zero status codes from urlencoded triggers", () => {
+    const form = new URLSearchParams({ "Payment.Status": "000", "Payment.ValidPayment": "true" });
+    expect(normalizeSumitIncomingPayload(form).status).toBe("000");
+  });
+
+  it("parses urlencoded array indices into RecurringCustomerItemIDs", () => {
+    const form = new URLSearchParams();
+    form.append("Payment.ValidPayment", "true");
+    form.append("Payment.Status", "000");
+    form.append("Payment.ID", "111");
+    form.append("RecurringCustomerItemIDs[0]", "444");
+    form.append("RecurringCustomerItemIDs[1]", "555");
+
+    const result = normalizeSumitIncomingPayload(form);
+    expect(result.eventType).toBe("recurring.charged");
+    expect(result.recurringItemId).toBe("444");
   });
 
   it("extracts reconciliation fields from real SUMIT view-shaped trigger payloads", () => {
@@ -187,6 +205,35 @@ describe("@deepclaw/sumit", () => {
       documentId: "60",
       amount: 1.18,
     });
+  });
+
+  it("redacts DirectDebit_* bank fields", () => {
+    const redacted = redactSumitPayload({
+      PaymentMethod: {
+        DirectDebit_Bank: 12,
+        DirectDebit_Branch: 567,
+        DirectDebit_Account: 123456,
+      },
+    }) as unknown as { PaymentMethod: Record<string, string> };
+
+    expect(redacted.PaymentMethod.DirectDebit_Bank).toBe("[REDACTED]");
+    expect(redacted.PaymentMethod.DirectDebit_Branch).toBe("[REDACTED]");
+    expect(redacted.PaymentMethod.DirectDebit_Account).toBe("[REDACTED]");
+  });
+
+  it("redacts CardOwnerSocialId, CardOwnerName, 9-digit national IDs, and Upay_* error codes", () => {
+    const redacted = redactSumitPayload({
+      Payment: {
+        CreditCard_CardOwnerName: "Jane Doe",
+        CreditCard_CardOwnerSocialId: "123456789",
+      },
+      TechnicalErrorDetails: "rejected (Upay_30001419) for citizen 987654321",
+    }) as { Payment: { CreditCard_CardOwnerName: string; CreditCard_CardOwnerSocialId: string }; TechnicalErrorDetails: string };
+
+    expect(redacted.Payment.CreditCard_CardOwnerName).toBe("[REDACTED]");
+    expect(redacted.Payment.CreditCard_CardOwnerSocialId).toBe("[REDACTED]");
+    expect(redacted.TechnicalErrorDetails).not.toContain("Upay_30001419");
+    expect(redacted.TechnicalErrorDetails).not.toContain("987654321");
   });
 
   it("redacts sensitive provider/payment data recursively", () => {

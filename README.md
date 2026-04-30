@@ -2,6 +2,8 @@
 
 TypeScript helpers for integrating with SUMIT / OfficeGuy / Upay billing flows.
 
+> See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for a deeper summary of the SUMIT endpoints, response envelopes, trigger shapes, and redaction rules this package targets.
+
 This package intentionally focuses on provider-specific pure logic that can be reused across apps:
 
 - Build `/billing/recurring/charge/` request payloads.

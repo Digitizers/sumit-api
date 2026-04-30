@@ -87,7 +87,7 @@ export interface NormalizedSumitEvent {
 
 type UnknownRecord = Record<string, unknown>;
 
-const SENSITIVE_KEY_PATTERN = /(^|_)(api(public)?key|singleusetoken|token|authorization|secret|password|cvv|citizenid|card(mask|pattern|token|expiration)?|creditcard(_.*)?|authnumber|emailaddress|phone|resultrecord|documentdownloadurl)$/i;
+const SENSITIVE_KEY_PATTERN = /(^|_)(api(public)?key|singleusetoken|token|authorization|secret|password|cvv|citizenid|card(mask|pattern|token|expiration)?|cardowner(name|socialid)?|creditcard(_.*)?|directdebit(_.*)?|authnumber|emailaddress|phone|resultrecord|documentdownloadurl)$/i;
 
 export function currencyToSumitCode(currency: SumitCurrency): 0 | 1 | 2 {
   if (currency === 0 || currency === "ILS") return 0;
@@ -242,8 +242,10 @@ export function redactSensitiveText(value: string): string {
     .replace(/(singleuse)?token\s*[:=]\s*[^\s;,]+/gi, "$1token=[REDACTED]")
     .replace(/api\s*key\s*[:=]\s*[^\s;,]+/gi, "api key=[REDACTED]")
     .replace(/card(number)?\s*[:=]\s*[^\s;,]+/gi, "card$1=[REDACTED]")
+    .replace(/\bUpay_\w+/gi, "[REDACTED]")
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[REDACTED]")
-    .replace(/\b\d{12,19}\b/g, "[REDACTED]");
+    .replace(/\b\d{12,19}\b/g, "[REDACTED]")
+    .replace(/\b\d{9}\b/g, "[REDACTED]");
 }
 
 function normalizeKnownEventType(value: unknown): Exclude<SumitNormalizedEventType, "sumit.trigger.unmapped"> | undefined {
@@ -295,22 +297,69 @@ function normalizeViewShapedTrigger(response: UnknownRecord): NormalizedSumitEve
 function formToNestedObject(form: URLSearchParams): UnknownRecord {
   const root: UnknownRecord = {};
   for (const [key, value] of Array.from(form.entries())) {
-    const parts = key.split(".").filter(Boolean);
-    let current = root;
-    for (const part of parts.slice(0, -1)) {
-      const next = current[part];
-      if (!isRecord(next)) current[part] = {};
-      current = current[part] as UnknownRecord;
+    const segments = key
+      .split(".")
+      .filter(Boolean)
+      .flatMap((part) => {
+        const match = part.match(/^([^\[]+)((?:\[\d+\])+)$/);
+        if (!match) return [{ name: part, index: undefined as number | undefined }];
+        const name = match[1];
+        const indices = Array.from(match[2].matchAll(/\[(\d+)\]/g)).map((m) => Number(m[1]));
+        return [{ name, index: undefined as number | undefined }, ...indices.map((index) => ({ name: "", index }))];
+      });
+
+    let current: UnknownRecord | unknown[] = root;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const segment = segments[i];
+      const next = segments[i + 1];
+      const wantArray = next.index !== undefined;
+      current = descend(current, segment, wantArray);
     }
-    current[parts.at(-1) ?? key] = parseScalar(value);
+    assign(current, segments[segments.length - 1], parseScalar(value));
   }
   return root;
+}
+
+function descend(node: UnknownRecord | unknown[], segment: { name: string; index: number | undefined }, wantArray: boolean): UnknownRecord | unknown[] {
+  const existing = read(node, segment);
+  if (wantArray) {
+    if (Array.isArray(existing)) return existing;
+    const fresh: unknown[] = [];
+    write(node, segment, fresh);
+    return fresh;
+  }
+  if (isRecord(existing)) return existing;
+  const fresh: UnknownRecord = {};
+  write(node, segment, fresh);
+  return fresh;
+}
+
+function read(node: UnknownRecord | unknown[], segment: { name: string; index: number | undefined }): unknown {
+  if (segment.index !== undefined) return Array.isArray(node) ? node[segment.index] : undefined;
+  return Array.isArray(node) ? undefined : node[segment.name];
+}
+
+function write(node: UnknownRecord | unknown[], segment: { name: string; index: number | undefined }, value: unknown): void {
+  if (segment.index !== undefined && Array.isArray(node)) node[segment.index] = value;
+  else if (!Array.isArray(node)) node[segment.name] = value;
+}
+
+function assign(node: UnknownRecord | unknown[], segment: { name: string; index: number | undefined }, value: unknown): void {
+  if (segment.index !== undefined && Array.isArray(node)) {
+    node[segment.index] = value;
+    return;
+  }
+  if (Array.isArray(node)) return;
+  const existing = node[segment.name];
+  if (Array.isArray(existing)) existing.push(value);
+  else if (existing !== undefined) node[segment.name] = [existing, value];
+  else node[segment.name] = value;
 }
 
 function parseScalar(value: string): unknown {
   if (value === "true") return true;
   if (value === "false") return false;
-  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  if (/^-?\d+(\.\d+)?$/.test(value) && !/^-?0\d/.test(value)) return Number(value);
   return value;
 }
 
