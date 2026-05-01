@@ -266,4 +266,31 @@ describe("@deepclaw/sumit", () => {
       EmailAddress: "[REDACTED]",
     });
   });
+
+  it("does not allow form-encoded prototype pollution via __proto__ keys", () => {
+    const form = new URLSearchParams();
+    form.append("__proto__.polluted", "yes");
+    form.append("constructor.prototype.alsoPolluted", "yes");
+    form.append("Payment.Status", "000");
+
+    const event = normalizeSumitIncomingPayload(form);
+
+    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>).alsoPolluted).toBeUndefined();
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(event.eventType).toBeDefined();
+  });
+
+  it("preserves non-citizen 9-digit numbers in diagnostic text and redacts citizen IDs in context", () => {
+    const passthrough = redactSumitPayload({
+      TechnicalErrorDetails: "Document 123456789 was not found",
+    }) as { TechnicalErrorDetails: string };
+    expect(passthrough.TechnicalErrorDetails).toBe("Document 123456789 was not found");
+
+    const redacted = redactSumitPayload({
+      TechnicalErrorDetails: "rejected for citizen 987654321 (ת.ז 123456789)",
+    }) as { TechnicalErrorDetails: string };
+    expect(redacted.TechnicalErrorDetails).not.toContain("987654321");
+    expect(redacted.TechnicalErrorDetails).not.toContain("123456789");
+  });
 });

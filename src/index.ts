@@ -245,7 +245,7 @@ export function redactSensitiveText(value: string): string {
     .replace(/\bUpay_\w+/gi, "[REDACTED]")
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[REDACTED]")
     .replace(/\b\d{12,19}\b/g, "[REDACTED]")
-    .replace(/\b\d{9}\b/g, "[REDACTED]");
+    .replace(/((?:citizen(?:[\s_]*id)?|ת\.ז\.?|מ\.ז\.?)\W*)\d{9}\b/gi, "$1[REDACTED]");
 }
 
 function normalizeKnownEventType(value: unknown): Exclude<SumitNormalizedEventType, "sumit.trigger.unmapped"> | undefined {
@@ -294,6 +294,8 @@ function normalizeViewShapedTrigger(response: UnknownRecord): NormalizedSumitEve
   });
 }
 
+const FORBIDDEN_FORM_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function formToNestedObject(form: URLSearchParams): UnknownRecord {
   const root: UnknownRecord = {};
   for (const [key, value] of Array.from(form.entries())) {
@@ -307,6 +309,8 @@ function formToNestedObject(form: URLSearchParams): UnknownRecord {
         const indices = Array.from(match[2].matchAll(/\[(\d+)\]/g)).map((m) => Number(m[1]));
         return [{ name, index: undefined as number | undefined }, ...indices.map((index) => ({ name: "", index }))];
       });
+
+    if (segments.some((segment) => segment.index === undefined && FORBIDDEN_FORM_KEYS.has(segment.name))) continue;
 
     let current: UnknownRecord | unknown[] = root;
     for (let i = 0; i < segments.length - 1; i++) {
