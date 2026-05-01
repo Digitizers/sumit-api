@@ -48,6 +48,34 @@ SUMIT endpoints often return an outer wrapper:
 
 The outer `Status` is the framework-level response status, not the payment status code. Payment approval codes live on `Data.Payment.Status` or `Payment.Status`. Trigger payloads can flatten `Data` to the top level; the normalizer checks both shapes.
 
+## `POST /billing/payments/charge/`
+
+One-off charge against a `SingleUseToken`. Built by `buildOneOffChargePayload`:
+
+```ts
+{
+  Credentials: { CompanyID, APIKey },
+  Customer: {
+    ExternalIdentifier: string,
+    SearchMode: 2,
+    Name: string,
+    EmailAddress: string,
+  },
+  SingleUseToken: string,
+  Items: [{
+    Item: { Name, Description },
+    Quantity: number,
+    UnitPrice: number,
+    Currency: 0 | 1 | 2,
+  }],
+  VATIncluded: boolean,
+  OnlyDocument: boolean,
+  AuthoriseOnly?: true,
+}
+```
+
+Response shape matches `/billing/recurring/charge/` (same `Payment.*` envelope). Pass it to `normalizeChargeResponse` — a one-off success surfaces as `eventType: "payment.succeeded"` with no `recurringItemId`.
+
 ## `POST /billing/recurring/charge/`
 
 Charges a customer and creates/updates a recurring item.
@@ -94,7 +122,6 @@ Successful payloads observed in smoke tests include `Payment.ValidPayment === tr
 | `POST /billing/recurring/cancel/` | Cancel a recurring item. |
 | `POST /billing/recurring/update/` | Update a recurring item. |
 | `POST /billing/recurring/listforcustomer/` | List customer recurring items. |
-| `POST /billing/payments/charge/` | One-off charge. |
 | `POST /billing/payments/list/` | List historical payments. |
 | `POST /billing/payments/get/` | Fetch one payment. |
 | `POST /billing/payments/beginredirect/` | Start hosted/redirect checkout. |

@@ -16,7 +16,7 @@ export interface SumitDiagnostic {
   technicalErrorDetails?: string;
 }
 
-export interface BuildRecurringChargePayloadParams {
+interface BaseChargeParams {
   companyId: number;
   apiKey: string;
   customer: {
@@ -25,21 +25,33 @@ export interface BuildRecurringChargePayloadParams {
     emailAddress: string;
   };
   singleUseToken: string;
-  item: {
-    name: string;
-    description: string;
-    quantity?: number;
-    unitPrice: number;
-    currency: SumitCurrency;
-    durationMonths: number;
-    recurrence?: number;
-  };
   vatIncluded?: boolean;
   onlyDocument?: boolean;
   authoriseOnly?: boolean;
 }
 
-export interface SumitRecurringChargePayload {
+export interface OneOffChargeItem {
+  name: string;
+  description: string;
+  quantity?: number;
+  unitPrice: number;
+  currency: SumitCurrency;
+}
+
+export interface RecurringChargeItem extends OneOffChargeItem {
+  durationMonths: number;
+  recurrence?: number;
+}
+
+export interface BuildOneOffChargePayloadParams extends BaseChargeParams {
+  item: OneOffChargeItem;
+}
+
+export interface BuildRecurringChargePayloadParams extends BaseChargeParams {
+  item: RecurringChargeItem;
+}
+
+interface BaseChargePayload {
   Credentials: {
     CompanyID: number;
     APIKey: string;
@@ -51,6 +63,24 @@ export interface SumitRecurringChargePayload {
     EmailAddress: string;
   };
   SingleUseToken: string;
+  VATIncluded: boolean;
+  OnlyDocument: boolean;
+  AuthoriseOnly?: true;
+}
+
+export interface SumitOneOffChargePayload extends BaseChargePayload {
+  Items: Array<{
+    Item: {
+      Name: string;
+      Description: string;
+    };
+    Quantity: number;
+    UnitPrice: number;
+    Currency: 0 | 1 | 2;
+  }>;
+}
+
+export interface SumitRecurringChargePayload extends BaseChargePayload {
   Items: Array<{
     Item: {
       Name: string;
@@ -63,9 +93,6 @@ export interface SumitRecurringChargePayload {
     Duration_Months: number;
     Recurrence: number;
   }>;
-  VATIncluded: boolean;
-  OnlyDocument: boolean;
-  AuthoriseOnly?: true;
 }
 
 export interface NormalizedSumitEvent {
@@ -104,19 +131,26 @@ export function currencyFromSumitCode(currency: unknown): "ILS" | "USD" | "EUR" 
   return String(currency);
 }
 
+export function buildOneOffChargePayload(params: BuildOneOffChargePayloadParams): SumitOneOffChargePayload {
+  return {
+    ...baseChargeEnvelope(params),
+    Items: [
+      {
+        Item: {
+          Name: params.item.name,
+          Description: params.item.description,
+        },
+        Quantity: params.item.quantity ?? 1,
+        UnitPrice: params.item.unitPrice,
+        Currency: currencyToSumitCode(params.item.currency),
+      },
+    ],
+  };
+}
+
 export function buildRecurringChargePayload(params: BuildRecurringChargePayloadParams): SumitRecurringChargePayload {
   return {
-    Credentials: {
-      CompanyID: params.companyId,
-      APIKey: params.apiKey,
-    },
-    Customer: {
-      ExternalIdentifier: params.customer.externalIdentifier,
-      SearchMode: 2,
-      Name: params.customer.name,
-      EmailAddress: params.customer.emailAddress,
-    },
-    SingleUseToken: params.singleUseToken,
+    ...baseChargeEnvelope(params),
     Items: [
       {
         Item: {
@@ -131,6 +165,22 @@ export function buildRecurringChargePayload(params: BuildRecurringChargePayloadP
         Recurrence: params.item.recurrence ?? 0,
       },
     ],
+  };
+}
+
+function baseChargeEnvelope(params: BaseChargeParams): BaseChargePayload {
+  return {
+    Credentials: {
+      CompanyID: params.companyId,
+      APIKey: params.apiKey,
+    },
+    Customer: {
+      ExternalIdentifier: params.customer.externalIdentifier,
+      SearchMode: 2,
+      Name: params.customer.name,
+      EmailAddress: params.customer.emailAddress,
+    },
+    SingleUseToken: params.singleUseToken,
     VATIncluded: params.vatIncluded ?? true,
     OnlyDocument: params.onlyDocument ?? false,
     ...(params.authoriseOnly ? { AuthoriseOnly: true as const } : {}),
@@ -139,10 +189,15 @@ export function buildRecurringChargePayload(params: BuildRecurringChargePayloadP
 
 export function normalizeSumitIncomingPayload(payload: unknown): NormalizedSumitEvent {
   const objectPayload = unwrapSumitJsonEnvelope(payload instanceof URLSearchParams ? formToNestedObject(payload) : payload);
-  return normalizeRecurringChargeResponse(objectPayload);
+  return normalizeChargeResponse(objectPayload);
 }
 
-export function normalizeRecurringChargeResponse(response: unknown): NormalizedSumitEvent {
+// Same logic for one-off and recurring responses — the response shape is
+// shared, and the normalizer surfaces `recurring.charged` only when a
+// `RecurringCustomerItemIDs[*]` is present.
+export const normalizeRecurringChargeResponse = normalizeChargeResponse;
+
+export function normalizeChargeResponse(response: unknown): NormalizedSumitEvent {
   if (!isRecord(response)) {
     return unmappedDiagnostic(null);
   }

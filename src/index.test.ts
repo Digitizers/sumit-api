@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOneOffChargePayload,
   buildRecurringChargePayload,
+  normalizeChargeResponse,
   normalizeRecurringChargeResponse,
   normalizeSumitIncomingPayload,
   redactSumitPayload,
@@ -53,6 +55,65 @@ describe("@deepclaw/sumit", () => {
       VATIncluded: true,
       OnlyDocument: false,
     });
+  });
+
+  it("builds the SUMIT one-off charge payload without Duration_Months/Recurrence", () => {
+    const payload = buildOneOffChargePayload({
+      companyId: 123,
+      apiKey: "api-key",
+      customer: {
+        externalIdentifier: "org-1",
+        name: "Acme",
+        emailAddress: "billing@example.invalid",
+      },
+      singleUseToken: "single-use-token",
+      item: {
+        name: "Pro Plan (one-off)",
+        description: "One-time charge",
+        quantity: 2,
+        unitPrice: 19,
+        currency: "ILS",
+      },
+      vatIncluded: false,
+    });
+
+    expect(payload).toEqual({
+      Credentials: { CompanyID: 123, APIKey: "api-key" },
+      Customer: {
+        ExternalIdentifier: "org-1",
+        SearchMode: 2,
+        Name: "Acme",
+        EmailAddress: "billing@example.invalid",
+      },
+      SingleUseToken: "single-use-token",
+      Items: [
+        {
+          Item: { Name: "Pro Plan (one-off)", Description: "One-time charge" },
+          Quantity: 2,
+          UnitPrice: 19,
+          Currency: 0,
+        },
+      ],
+      VATIncluded: false,
+      OnlyDocument: false,
+    });
+  });
+
+  it("exposes normalizeChargeResponse as the canonical normalizer (alias for normalizeRecurringChargeResponse)", () => {
+    expect(normalizeChargeResponse).toBe(normalizeRecurringChargeResponse);
+  });
+
+  it("normalizes a one-off success response (no RecurringCustomerItemIDs) as payment.succeeded", () => {
+    const result = normalizeChargeResponse({
+      Payment: { ID: 111, CustomerID: 222, ValidPayment: true, Status: "000", Amount: 19, Currency: 0 },
+      DocumentID: 333,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.eventType).toBe("payment.succeeded");
+    expect(result.recurringItemId).toBeUndefined();
+    expect(result.paymentId).toBe("111");
+    expect(result.documentId).toBe("333");
   });
 
   it("normalizes the successful SUMIT recurring charge response observed in production smoke", () => {

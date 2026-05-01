@@ -15,6 +15,7 @@ Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react) �
 
 - [Why this package](#why-this-package)
 - [Install](#install)
+- [Build a one-off charge payload](#build-a-one-off-charge-payload)
 - [Build a recurring-charge payload](#build-a-recurring-charge-payload)
 - [Normalize a charge response](#normalize-a-charge-response)
 - [Normalize a SUMIT trigger / webhook payload](#normalize-a-sumit-trigger--webhook-payload)
@@ -51,6 +52,33 @@ The package has **no runtime dependencies**.
 
 ---
 
+## Build a one-off charge payload
+
+```ts
+import { buildOneOffChargePayload } from "sumit-api";
+
+const payload = buildOneOffChargePayload({
+  companyId: 123,
+  apiKey: process.env.SUMIT_API_KEY!,
+  customer: {
+    externalIdentifier: "org_123",
+    name: "Acme Ltd",
+    emailAddress: "billing@example.com",
+  },
+  singleUseToken: "[single-use-token-from-client]",
+  item: {
+    name: "Setup fee",
+    description: "One-time onboarding charge",
+    unitPrice: 49,
+    currency: "USD",
+  },
+});
+```
+
+`POST` this body to `https://api.sumit.co.il/billing/payments/charge/`. The response uses the same shape recurring charges return, so [`normalizeChargeResponse`](#normalize-a-charge-response) handles both — a one-off success surfaces as `eventType: "payment.succeeded"` (no `recurringItemId`).
+
+---
+
 ## Build a recurring-charge payload
 
 ```ts
@@ -79,17 +107,23 @@ const payload = buildRecurringChargePayload({
 
 ## Normalize a charge response
 
-```ts
-import { normalizeRecurringChargeResponse } from "sumit-api";
+`normalizeChargeResponse` handles both one-off and recurring response shapes — a `recurring.charged` event is surfaced only when SUMIT returns a `RecurringCustomerItemIDs[*]`. (`normalizeRecurringChargeResponse` remains exported as an alias.)
 
-const event = normalizeRecurringChargeResponse(sumitResponse);
+```ts
+import { normalizeChargeResponse } from "sumit-api";
+
+const event = normalizeChargeResponse(sumitResponse);
 
 if (event.ok && event.eventType === "recurring.charged") {
   // Save event.customerId, event.recurringItemId, event.paymentId, event.documentId, ...
 }
 
+if (event.ok && event.eventType === "payment.succeeded") {
+  // One-off charge succeeded — store event.paymentId and event.documentId.
+}
+
 if (event.ok === false) {
-  // Don't activate the subscription. Store event.diagnostic safely.
+  // Don't activate the subscription / mark the order paid. Store event.diagnostic safely.
 }
 ```
 

@@ -14,8 +14,9 @@ Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react).
 
 Only these exports are stable:
 
+- `buildOneOffChargePayload(params)` — assembles the `/billing/payments/charge/` request body.
 - `buildRecurringChargePayload(params)` — assembles the `/billing/recurring/charge/` request body.
-- `normalizeRecurringChargeResponse(response)` / `normalizeSumitIncomingPayload(payload)` — collapse the three SUMIT response shapes (JSON, urlencoded, `json=…` envelope) into a single `NormalizedSumitEvent`.
+- `normalizeChargeResponse(response)` (alias: `normalizeRecurringChargeResponse`) / `normalizeSumitIncomingPayload(payload)` — collapse the three SUMIT response shapes (JSON, urlencoded, `json=…` envelope) into a single `NormalizedSumitEvent`. The same logic handles one-off and recurring responses; `recurring.charged` is surfaced only when `RecurringCustomerItemIDs[*]` is present.
 - `redactSumitPayload(payload)` — recursive redactor for logs.
 - `currencyToSumitCode` / `currencyFromSumitCode`.
 
