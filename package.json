@@ -1,7 +1,7 @@
 {
   "name": "sumit-api",
   "version": "0.1.0",
-  "description": "TypeScript helpers for SUMIT/OfficeGuy/Upay recurring charges and trigger webhooks.",
+  "description": "TypeScript helpers for SUMIT (formerly OfficeGuy) recurring charges and trigger webhooks. Includes redaction for upstream Upay clearer error codes.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
