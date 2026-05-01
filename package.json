@@ -1,5 +1,5 @@
 {
-  "name": "@godigitizer/sumit-api",
+  "name": "sumit-api",
   "version": "0.1.0",
   "description": "TypeScript helpers for SUMIT/OfficeGuy/Upay recurring charges and trigger webhooks.",
   "license": "MIT",

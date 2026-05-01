@@ -1,13 +1,13 @@
-# @godigitizer/sumit-api
+# sumit-api
 
-[![npm](https://img.shields.io/npm/v/@godigitizer/sumit-api.svg)](https://www.npmjs.com/package/@godigitizer/sumit-api)
-[![types](https://img.shields.io/npm/types/@godigitizer/sumit-api.svg)](https://www.npmjs.com/package/@godigitizer/sumit-api)
-[![license](https://img.shields.io/npm/l/@godigitizer/sumit-api.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/sumit-api.svg)](https://www.npmjs.com/package/sumit-api)
+[![types](https://img.shields.io/npm/types/sumit-api.svg)](https://www.npmjs.com/package/sumit-api)
+[![license](https://img.shields.io/npm/l/sumit-api.svg)](LICENSE)
 [![zero deps](https://img.shields.io/badge/runtime%20deps-0-success)](package.json)
 
 > Pure TypeScript helpers for [SUMIT / OfficeGuy / Upay](https://sumit.co.il) recurring billing and trigger webhooks. **Zero runtime dependencies.**
 
-Companion package: [`@godigitizer/sumit-react`](https://github.com/Digitizers/sumit-react) — `<SumitCheckout />` plus Next.js charge and webhook route helpers.
+Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react) — `<SumitCheckout />` plus Next.js charge and webhook route helpers.
 
 ---
 
@@ -40,11 +40,11 @@ SUMIT (also branded **OfficeGuy** and **Upay**) does not publish a typed SDK for
 ## Install
 
 ```bash
-pnpm add @godigitizer/sumit-api
+pnpm add sumit-api
 # or
-npm install @godigitizer/sumit-api
+npm install sumit-api
 # or
-yarn add @godigitizer/sumit-api
+yarn add sumit-api
 ```
 
 The package has **no runtime dependencies**.
@@ -54,7 +54,7 @@ The package has **no runtime dependencies**.
 ## Build a recurring-charge payload
 
 ```ts
-import { buildRecurringChargePayload } from "@godigitizer/sumit-api";
+import { buildRecurringChargePayload } from "sumit-api";
 
 const payload = buildRecurringChargePayload({
   companyId: 123,
@@ -80,7 +80,7 @@ const payload = buildRecurringChargePayload({
 ## Normalize a charge response
 
 ```ts
-import { normalizeRecurringChargeResponse } from "@godigitizer/sumit-api";
+import { normalizeRecurringChargeResponse } from "sumit-api";
 
 const event = normalizeRecurringChargeResponse(sumitResponse);
 
@@ -108,7 +108,7 @@ A successful SUMIT charge response typically includes:
 ## Normalize a SUMIT trigger / webhook payload
 
 ```ts
-import { normalizeSumitIncomingPayload } from "@godigitizer/sumit-api";
+import { normalizeSumitIncomingPayload } from "sumit-api";
 
 const normalized = normalizeSumitIncomingPayload(payloadOrUrlSearchParams);
 
