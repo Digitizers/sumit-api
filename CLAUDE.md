@@ -4,9 +4,9 @@ Guidance for AI assistants working in this repository.
 
 ## Project
 
-`@digitizers/sumit-api` — pure TypeScript helpers for SUMIT / OfficeGuy / Upay recurring billing and trigger webhooks. **Zero runtime dependencies.** Single-file source: [`src/index.ts`](src/index.ts).
+`@godigitizer/sumit-api` — pure TypeScript helpers for SUMIT / OfficeGuy / Upay recurring billing and trigger webhooks. **Zero runtime dependencies.** Single-file source: [`src/index.ts`](src/index.ts).
 
-Companion package: [`@digitizers/sumit-react`](https://github.com/Digitizers/sumit-react).
+Companion package: [`@godigitizer/sumit-react`](https://github.com/Digitizers/sumit-react).
 
 ## Public surface
 
