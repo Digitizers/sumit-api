@@ -1,5 +1,10 @@
 # @digitizers/sumit-api
 
+[![npm](https://img.shields.io/npm/v/@digitizers/sumit-api.svg)](https://www.npmjs.com/package/@digitizers/sumit-api)
+[![types](https://img.shields.io/npm/types/@digitizers/sumit-api.svg)](https://www.npmjs.com/package/@digitizers/sumit-api)
+[![license](https://img.shields.io/npm/l/@digitizers/sumit-api.svg)](LICENSE)
+[![zero deps](https://img.shields.io/badge/runtime%20deps-0-success)](package.json)
+
 > Pure TypeScript helpers for [SUMIT / OfficeGuy / Upay](https://sumit.co.il) recurring billing and trigger webhooks. **Zero runtime dependencies.**
 
 Companion package: [`@digitizers/sumit-react`](https://github.com/Digitizers/sumit-react) — `<SumitCheckout />` plus Next.js charge and webhook route helpers.
@@ -133,15 +138,14 @@ These events still normalize as `sumit.trigger.unmapped` until your application 
 
 > **Never log or persist raw SUMIT payloads.** Use `redactSumitPayload`, or persist only the safe normalized fields.
 
-`redactSumitPayload` masks common sensitive values, including:
+`redactSumitPayload` walks the value tree and masks sensitive data via two complementary mechanisms:
 
-- API keys and public API keys
-- Single-use tokens
-- Card numbers, CVV, expiry, citizen ID
-- `Authorization` headers, secrets, passwords
-- Email addresses
-- Document download URLs
-- Long card-like numbers found in arbitrary string fields
+| Mechanism | Catches |
+| --- | --- |
+| **Key-based** (`SENSITIVE_KEY_PATTERN`) | API keys, public keys, single-use tokens, card mask/pattern/token/expiration, citizen ID, card-owner name and social ID, `Authorization`, secrets, passwords, CVV, email addresses, phone, document download URLs, full `CreditCard_*` and `DirectDebit_*` subtrees. |
+| **Text-based** (`redactSensitiveText`) | Embedded emails, "Credit Card (1234)" patterns, `token=…` / `apikey=…` key-value strings, `Upay_*` references, UUIDs, 12–19 digit card-like numbers in free text, citizen IDs in keyword context (`citizen`, `ת.ז`, `מ.ז`). |
+
+Form payloads parsed by `normalizeSumitIncomingPayload` reject prototype-pollution keys (`__proto__`, `constructor`, `prototype`) before assembling the nested object — see [`src/index.ts`](src/index.ts).
 
 ---
 
