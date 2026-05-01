@@ -1,6 +1,6 @@
 # SUMIT API Reference
 
-This package wraps a small slice of the SUMIT / OfficeGuy / Upay billing API. It does **not** ship a transport client — `fetch` is the integrator's responsibility. The helpers here build request bodies, normalize responses, and redact sensitive fields before logging or persistence.
+This package wraps a small slice of the SUMIT (formerly OfficeGuy) billing API. SUMIT routes card clearing through partner processors — Upay is one of them — and their error codes (e.g. `Upay_30001419`) surface inside SUMIT response bodies, which is why this package redacts them by default. It does **not** ship a transport client — `fetch` is the integrator's responsibility. The helpers here build request bodies, normalize responses, and redact sensitive fields before logging or persistence.
 
 ## Official sources
 

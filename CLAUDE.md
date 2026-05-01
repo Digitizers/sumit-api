@@ -4,7 +4,9 @@ Guidance for AI assistants working in this repository.
 
 ## Project
 
-`sumit-api` — pure TypeScript helpers for SUMIT / OfficeGuy / Upay recurring billing and trigger webhooks. **Zero runtime dependencies.** Single-file source: [`src/index.ts`](src/index.ts).
+`sumit-api` — pure TypeScript helpers for SUMIT (formerly OfficeGuy) recurring billing and trigger webhooks. **Zero runtime dependencies.** Single-file source: [`src/index.ts`](src/index.ts).
+
+SUMIT delegates card clearing to partner processors (Upay is one; SUMIT can route through others). Processor-level identifiers and error codes — most commonly `Upay_*` — appear unredacted inside SUMIT response bodies, which is why `redactSensitiveText` masks them.
 
 Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react).
 

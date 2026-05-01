@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/npm/l/sumit-api.svg)](LICENSE)
 [![zero deps](https://img.shields.io/badge/runtime%20deps-0-success)](package.json)
 
-> Pure TypeScript helpers for [SUMIT / OfficeGuy / Upay](https://sumit.co.il) recurring billing and trigger webhooks. **Zero runtime dependencies.**
+> Pure TypeScript helpers for [SUMIT](https://sumit.co.il) (formerly **OfficeGuy**) recurring billing and trigger webhooks. SUMIT routes card clearing through partner processors such as **Upay**, and their error codes surface in SUMIT responses — this package handles SUMIT's request/response shapes and redacts those upstream codes before they hit your logs. **Zero runtime dependencies.**
 
 Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react) — `<SumitCheckout />` plus Next.js charge and webhook route helpers.
 
@@ -26,7 +26,7 @@ Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react) �
 
 ## Why this package
 
-SUMIT (also branded **OfficeGuy** and **Upay**) does not publish a typed SDK for their billing APIs, and their trigger webhooks ship in three different content shapes. This package gives you a small, opinionated surface that is safe to drop into any backend:
+SUMIT (formerly **OfficeGuy**) does not publish a typed SDK for their billing APIs, and their trigger webhooks ship in three different content shapes. SUMIT also delegates the actual card clearing to partner processors (**Upay** is one — others exist), so processor-level error codes (e.g. `Upay_30001419`) appear unredacted inside SUMIT's response bodies. This package gives you a small, opinionated surface that is safe to drop into any backend:
 
 - **Build** `/billing/recurring/charge/` request payloads with strict types.
 - **Normalize** successful and failed charge responses into a single discriminated union.
