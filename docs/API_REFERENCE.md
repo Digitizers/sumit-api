@@ -115,6 +115,65 @@ Notes:
 
 Successful payloads observed in smoke tests include `Payment.ValidPayment === true`, `Payment.Status === "000"`, `Payment.ID`, `CustomerID`, `DocumentID`, and `RecurringCustomerItemIDs[0]`.
 
+## `POST /accounting/documents/create/`
+
+Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / חשבונית מס-קבלה / קבלה) without charging a card. Built by `buildCreateDocumentPayload`:
+
+```ts
+{
+  Credentials: { CompanyID, APIKey },
+  Details: {
+    Type: number,            // SUMIT document type code; 1 = חשבון עסקה
+    Customer: {
+      SearchMode: 0 | 1 | 2, // 0 = match by ID (default for this endpoint)
+      Name: string,
+      EmailAddress?: string,
+      Phone?: string,
+      ExternalIdentifier?: string,
+      ID?: string,
+      CompanyNumber?: string, // ת.ז. / ח.פ.
+      Address?: string,
+      City?: string,
+      ZipCode?: string,
+      NoVAT?: boolean,
+    },
+    SendByEmail?: { EmailAddress, Original, SendAsPaymentRequest },
+    Language?: string,        // e.g. "he" / "en"
+    Currency?: "ILS" | "USD" | "EUR",
+    Description?: string,
+    ExternalReference?: string,
+    Date?: string,            // ISO date
+    DueDate?: string,
+    IsDraft?: boolean,
+  },
+  Items: [{
+    Quantity: number,
+    UnitPrice: number,
+    TotalPrice: number,       // defaults to UnitPrice * Quantity
+    VAT?: number,             // optional per-line override
+    Item: {
+      Name: string,
+      Description?: string,
+      SKU?: string,
+      ExternalIdentifier?: string,
+      SearchMode: 0 | 1 | 2,
+    },
+  }],
+  Payments: [],
+  VATIncluded: boolean,
+  VATPerItem?: boolean,
+  VATRate?: number,
+  ResponseLanguage?: string,
+}
+```
+
+Notes:
+
+- Unlike the charge endpoints, the documents endpoint takes `Currency` as the literal string code (`"ILS"` / `"USD"` / `"EUR"`), not the numeric code. The helper `currencyToSumitString` handles the mapping.
+- `Payments: []` for a חשבון עסקה — no payment has been collected yet. Use a different document type (e.g. חשבונית מס-קבלה) and a populated `Payments[]` to record an actual payment.
+- Successful responses surface `Data.DocumentID`, `Data.DocumentNumber`, and (when SUMIT generates one) `Data.DocumentDownloadURL`. Pass the response to `normalizeCreateDocumentResponse` to extract these as `document.created`.
+- A failed response surfaces as `document.failed` with redacted `userErrorMessage` / `technicalErrorDetails`.
+
 ## Related endpoints not wrapped directly
 
 | Endpoint | Purpose |

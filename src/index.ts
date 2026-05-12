@@ -5,7 +5,17 @@ export type SumitNormalizedEventType =
   | "recurring.charged"
   | "recurring.cancelled"
   | "invoice.created"
+  | "document.created"
+  | "document.failed"
   | "sumit.trigger.unmapped";
+
+// Known SUMIT document type codes. `TransactionInvoice` (1) is the
+// pre-payment "חשבון עסקה". Other numeric codes (tax invoice, receipt,
+// tax-invoice-receipt, etc.) accepted by SUMIT can be passed as plain
+// numbers — this object only lists values we have actively verified.
+export const SUMIT_DOCUMENT_TYPE = {
+  TransactionInvoice: 1,
+} as const;
 
 export interface SumitDiagnostic {
   hasData: boolean;
@@ -101,6 +111,8 @@ export interface NormalizedSumitEvent {
   paymentId?: string;
   customerId?: string;
   documentId?: string;
+  documentNumber?: string;
+  documentDownloadUrl?: string;
   recurringItemId?: string;
   amount?: number;
   currency?: "ILS" | "USD" | "EUR" | string;
@@ -112,6 +124,121 @@ export interface NormalizedSumitEvent {
   diagnostic?: SumitDiagnostic;
 }
 
+export interface CreateDocumentItem {
+  name: string;
+  description?: string;
+  unitPrice: number;
+  quantity?: number;
+  // Optional override; defaults to unitPrice * quantity.
+  totalPrice?: number;
+  // Optional explicit per-line VAT amount.
+  vat?: number;
+  sku?: string;
+  externalIdentifier?: string;
+}
+
+export interface CreateDocumentCustomer {
+  name: string;
+  emailAddress?: string;
+  phone?: string;
+  externalIdentifier?: string;
+  // SUMIT internal customer ID (when known).
+  id?: string;
+  // Mapped to CompanyNumber — Israeli ת.ז. / ח.פ.
+  taxId?: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  noVAT?: boolean;
+  // SUMIT customer search mode. 0 = match by ID only (default for this endpoint),
+  // 2 = upsert by ExternalIdentifier (matches the charge endpoints).
+  searchMode?: 0 | 1 | 2;
+}
+
+export interface CreateDocumentSendByEmail {
+  emailAddress: string;
+  original?: boolean;
+  sendAsPaymentRequest?: boolean;
+}
+
+export interface BuildCreateDocumentPayloadParams {
+  companyId: number;
+  apiKey: string;
+  // SUMIT document type code. Use SUMIT_DOCUMENT_TYPE.TransactionInvoice (1)
+  // for חשבון עסקה. Other codes from SUMIT's enum can be passed as plain numbers.
+  documentType: number;
+  customer: CreateDocumentCustomer;
+  items: CreateDocumentItem[];
+  // Defaults to "ILS". Accepts the same shape as the charge endpoints but
+  // SUMIT documents take the literal string code, not the numeric one.
+  currency?: SumitCurrency;
+  // Whether the UnitPrice values already include VAT. Defaults to true to
+  // match SUMIT's API default; pass false if your items are net.
+  vatIncluded?: boolean;
+  vatPerItem?: boolean;
+  vatRate?: number;
+  language?: string;
+  description?: string;
+  externalReference?: string;
+  date?: string;
+  dueDate?: string;
+  sendByEmail?: CreateDocumentSendByEmail;
+  isDraft?: boolean;
+  responseLanguage?: string;
+}
+
+type SumitCustomerSearchMode = 0 | 1 | 2;
+
+export interface SumitCreateDocumentPayload {
+  Credentials: { CompanyID: number; APIKey: string };
+  Details: {
+    Type: number;
+    Customer: {
+      SearchMode: SumitCustomerSearchMode;
+      Name: string;
+      EmailAddress?: string;
+      Phone?: string;
+      ExternalIdentifier?: string;
+      ID?: string;
+      CompanyNumber?: string;
+      Address?: string;
+      City?: string;
+      ZipCode?: string;
+      NoVAT?: boolean;
+    };
+    SendByEmail?: {
+      EmailAddress: string;
+      Original: boolean;
+      SendAsPaymentRequest: boolean;
+    };
+    Language?: string;
+    Currency?: "ILS" | "USD" | "EUR" | string;
+    Description?: string;
+    ExternalReference?: string;
+    Date?: string;
+    DueDate?: string;
+    IsDraft?: boolean;
+  };
+  Items: Array<{
+    Quantity: number;
+    UnitPrice: number;
+    TotalPrice: number;
+    VAT?: number;
+    Item: {
+      Name: string;
+      Description?: string;
+      SKU?: string;
+      ExternalIdentifier?: string;
+      SearchMode: SumitCustomerSearchMode;
+    };
+  }>;
+  Payments: never[];
+  VATIncluded: boolean;
+  VATPerItem?: boolean;
+  VATRate?: number;
+  ResponseLanguage?: string;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 const SENSITIVE_KEY_PATTERN = /(^|_)(api(public)?key|singleusetoken|token|authorization|secret|password|cvv|citizenid|card(mask|pattern|token|expiration)?|cardowner(name|socialid)?|creditcard(_.*)?|directdebit(_.*)?|authnumber|emailaddress|phone|resultrecord|documentdownloadurl)$/i;
@@ -121,6 +248,11 @@ export function currencyToSumitCode(currency: SumitCurrency): 0 | 1 | 2 {
   if (currency === 1 || currency === "USD") return 1;
   if (currency === 2 || currency === "EUR") return 2;
   throw new Error(`Unsupported SUMIT currency: ${String(currency)}`);
+}
+
+export function currencyToSumitString(currency: SumitCurrency): "ILS" | "USD" | "EUR" {
+  const code = currencyToSumitCode(currency);
+  return code === 0 ? "ILS" : code === 1 ? "USD" : "EUR";
 }
 
 export function currencyFromSumitCode(currency: unknown): "ILS" | "USD" | "EUR" | string | undefined {
@@ -166,6 +298,129 @@ export function buildRecurringChargePayload(params: BuildRecurringChargePayloadP
       },
     ],
   };
+}
+
+export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadParams): SumitCreateDocumentPayload {
+  if (!params.items.length) {
+    throw new Error("buildCreateDocumentPayload: items[] must not be empty");
+  }
+
+  const customer = compact({
+    SearchMode: (params.customer.searchMode ?? 0) as SumitCustomerSearchMode,
+    Name: params.customer.name,
+    EmailAddress: params.customer.emailAddress,
+    Phone: params.customer.phone,
+    ExternalIdentifier: params.customer.externalIdentifier,
+    ID: params.customer.id,
+    CompanyNumber: params.customer.taxId,
+    Address: params.customer.address,
+    City: params.customer.city,
+    ZipCode: params.customer.zipCode,
+    NoVAT: params.customer.noVAT,
+  }) as SumitCreateDocumentPayload["Details"]["Customer"];
+
+  const sendByEmail = params.sendByEmail
+    ? {
+        EmailAddress: params.sendByEmail.emailAddress,
+        Original: params.sendByEmail.original ?? true,
+        SendAsPaymentRequest: params.sendByEmail.sendAsPaymentRequest ?? false,
+      }
+    : undefined;
+
+  const details = compact({
+    Type: params.documentType,
+    Customer: customer,
+    SendByEmail: sendByEmail,
+    Language: params.language,
+    Currency: params.currency ? currencyToSumitString(params.currency) : undefined,
+    Description: params.description,
+    ExternalReference: params.externalReference,
+    Date: params.date,
+    DueDate: params.dueDate,
+    IsDraft: params.isDraft,
+  }) as SumitCreateDocumentPayload["Details"];
+
+  const items: SumitCreateDocumentPayload["Items"] = params.items.map((item) => {
+    const quantity = item.quantity ?? 1;
+    const totalPrice = item.totalPrice ?? round2(item.unitPrice * quantity);
+    return {
+      Quantity: quantity,
+      UnitPrice: item.unitPrice,
+      TotalPrice: totalPrice,
+      ...(item.vat !== undefined ? { VAT: item.vat } : {}),
+      Item: compact({
+        Name: item.name,
+        Description: item.description,
+        SKU: item.sku,
+        ExternalIdentifier: item.externalIdentifier,
+        SearchMode: 0 as SumitCustomerSearchMode,
+      }) as SumitCreateDocumentPayload["Items"][number]["Item"],
+    };
+  });
+
+  return compact({
+    Credentials: { CompanyID: params.companyId, APIKey: params.apiKey },
+    Details: details,
+    Items: items,
+    Payments: [] as never[],
+    VATIncluded: params.vatIncluded ?? true,
+    VATPerItem: params.vatPerItem,
+    VATRate: params.vatRate,
+    ResponseLanguage: params.responseLanguage,
+  }) as SumitCreateDocumentPayload;
+}
+
+export function normalizeCreateDocumentResponse(response: unknown): NormalizedSumitEvent {
+  if (!isRecord(response)) {
+    return unmappedDiagnostic(null);
+  }
+
+  const data = getRecord(response.Data) ?? response;
+  const documentId =
+    stringValue(response.DocumentID) ??
+    stringValue(data.DocumentID) ??
+    stringValue(getRecord(data.Document)?.ID);
+  const documentNumber =
+    stringValue(data.DocumentNumber) ??
+    stringValue(response.DocumentNumber) ??
+    stringValue(getRecord(data.Document)?.Number);
+  const documentDownloadUrl =
+    stringValue(data.DocumentDownloadURL) ??
+    stringValue(response.DocumentDownloadURL) ??
+    stringValue(getRecord(data.Document)?.DownloadURL);
+  const customerId =
+    stringValue(response.CustomerID) ??
+    stringValue(data.CustomerID) ??
+    stringValue(getRecord(data.Customer)?.ID);
+
+  const status = stringValue(response.Status);
+  const userErrorMessage = safeText(response.UserErrorMessage);
+  const technicalErrorDetails = safeText(response.TechnicalErrorDetails);
+  const failed = isFailedStatus({ status, userErrorMessage, technicalErrorDetails });
+  const succeeded = !failed && Boolean(documentId) && (status === undefined || status === "Success" || status === "0" || status === "000");
+
+  if (!documentId && !failed && !userErrorMessage && !technicalErrorDetails) {
+    return unmappedDiagnostic(response);
+  }
+
+  const eventType: SumitNormalizedEventType = failed ? "document.failed" : succeeded ? "document.created" : "sumit.trigger.unmapped";
+
+  return compact({
+    ok: failed ? false : succeeded ? true : null,
+    eventType,
+    documentId,
+    documentNumber,
+    documentDownloadUrl,
+    customerId,
+    status,
+    userErrorMessage,
+    technicalErrorDetails,
+    ...(eventType === "sumit.trigger.unmapped" || failed ? { diagnostic: diagnosticFor(response) } : {}),
+  });
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function baseChargeEnvelope(params: BaseChargeParams): BaseChargePayload {

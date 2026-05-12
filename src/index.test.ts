@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCreateDocumentPayload,
   buildOneOffChargePayload,
   buildRecurringChargePayload,
+  currencyToSumitString,
   normalizeChargeResponse,
+  normalizeCreateDocumentResponse,
   normalizeRecurringChargeResponse,
   normalizeSumitIncomingPayload,
   redactSumitPayload,
+  SUMIT_DOCUMENT_TYPE,
 } from "./index";
 
 describe("@deepclaw/sumit", () => {
@@ -340,6 +344,151 @@ describe("@deepclaw/sumit", () => {
     expect((Object.prototype as Record<string, unknown>).alsoPolluted).toBeUndefined();
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(event.eventType).toBeDefined();
+  });
+
+  it("builds a SUMIT /accounting/documents/create/ payload for a חשבון עסקה", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 123,
+      apiKey: "api-key",
+      documentType: SUMIT_DOCUMENT_TYPE.TransactionInvoice,
+      customer: {
+        externalIdentifier: "client-1",
+        name: "אקמה בע״מ",
+        emailAddress: "billing@example.invalid",
+        taxId: "514999000",
+      },
+      items: [
+        {
+          name: "עיצוב לוגו",
+          description: "כולל 3 סבבי תיקונים",
+          unitPrice: 1500,
+          quantity: 1,
+        },
+        {
+          name: "שעות פיתוח",
+          unitPrice: 300,
+          quantity: 8,
+        },
+      ],
+      currency: "ILS",
+      vatIncluded: false,
+      language: "he",
+    });
+
+    expect(payload).toEqual({
+      Credentials: { CompanyID: 123, APIKey: "api-key" },
+      Details: {
+        Type: 1,
+        Customer: {
+          SearchMode: 0,
+          Name: "אקמה בע״מ",
+          EmailAddress: "billing@example.invalid",
+          ExternalIdentifier: "client-1",
+          CompanyNumber: "514999000",
+        },
+        Language: "he",
+        Currency: "ILS",
+      },
+      Items: [
+        {
+          Quantity: 1,
+          UnitPrice: 1500,
+          TotalPrice: 1500,
+          Item: { Name: "עיצוב לוגו", Description: "כולל 3 סבבי תיקונים", SearchMode: 0 },
+        },
+        {
+          Quantity: 8,
+          UnitPrice: 300,
+          TotalPrice: 2400,
+          Item: { Name: "שעות פיתוח", SearchMode: 0 },
+        },
+      ],
+      Payments: [],
+      VATIncluded: false,
+    });
+  });
+
+  it("includes SendByEmail when requested and maps currency strings", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 7,
+      apiKey: "k",
+      documentType: 1,
+      customer: { name: "C" },
+      items: [{ name: "Item", unitPrice: 10 }],
+      currency: "USD",
+      sendByEmail: { emailAddress: "c@example.invalid", sendAsPaymentRequest: true },
+    });
+
+    expect(payload.Details.Currency).toBe("USD");
+    expect(payload.Details.SendByEmail).toEqual({
+      EmailAddress: "c@example.invalid",
+      Original: true,
+      SendAsPaymentRequest: true,
+    });
+  });
+
+  it("rejects an empty items[] array", () => {
+    expect(() =>
+      buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        documentType: 1,
+        customer: { name: "C" },
+        items: [],
+      }),
+    ).toThrow(/items\[\] must not be empty/);
+  });
+
+  it("normalizes a successful /accounting/documents/create/ response", () => {
+    const event = normalizeCreateDocumentResponse({
+      Status: "Success",
+      Data: {
+        DocumentID: "doc-42",
+        DocumentNumber: "2026001",
+        DocumentDownloadURL: "https://app.sumit.co.il/accounting/documents/2026001",
+        CustomerID: "cust-7",
+      },
+    });
+
+    expect(event.ok).toBe(true);
+    expect(event.eventType).toBe("document.created");
+    expect(event.documentId).toBe("doc-42");
+    expect(event.documentNumber).toBe("2026001");
+    expect(event.documentDownloadUrl).toBe("https://app.sumit.co.il/accounting/documents/2026001");
+    expect(event.customerId).toBe("cust-7");
+  });
+
+  it("normalizes a failed create-document response and redacts sensitive text", () => {
+    const event = normalizeCreateDocumentResponse({
+      Status: "Error",
+      UserErrorMessage: "השגיאה נכשלה",
+      TechnicalErrorDetails: "Upay_30001419 invalid token=abc",
+    });
+
+    expect(event.ok).toBe(false);
+    expect(event.eventType).toBe("document.failed");
+    expect(event.technicalErrorDetails).not.toContain("Upay_30001419");
+    expect(event.technicalErrorDetails).not.toContain("abc");
+    expect(event.diagnostic).toBeDefined();
+  });
+
+  it("redacts API key and customer email when logging a built document payload", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "super-secret",
+      documentType: 1,
+      customer: { name: "C", emailAddress: "c@example.invalid" },
+      items: [{ name: "Item", unitPrice: 10 }],
+    });
+    const redacted = redactSumitPayload(payload) as { Credentials: { APIKey: string }; Details: { Customer: { EmailAddress?: string } } };
+    expect(redacted.Credentials.APIKey).toBe("[REDACTED]");
+    expect(redacted.Details.Customer.EmailAddress).toBe("[REDACTED]");
+  });
+
+  it("currencyToSumitString maps codes and labels", () => {
+    expect(currencyToSumitString("ILS")).toBe("ILS");
+    expect(currencyToSumitString(1)).toBe("USD");
+    expect(currencyToSumitString("EUR")).toBe("EUR");
   });
 
   it("preserves non-citizen 9-digit numbers in diagnostic text and redacts citizen IDs in context", () => {
