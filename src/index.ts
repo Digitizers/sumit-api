@@ -9,13 +9,62 @@ export type SumitNormalizedEventType =
   | "document.failed"
   | "sumit.trigger.unmapped";
 
-// Known SUMIT document type codes. `TransactionInvoice` (1) is the
-// pre-payment "חשבון עסקה". Other numeric codes (tax invoice, receipt,
-// tax-invoice-receipt, etc.) accepted by SUMIT can be passed as plain
-// numbers — this object only lists values we have actively verified.
+// SUMIT document type codes from `Accounting_Typed_DocumentType` in the
+// official OpenAPI spec. Pass any of these (or any other numeric code SUMIT
+// supports) via `documentType`.
+//
+// Earlier (`0.3.0`) this object exported `TransactionInvoice = 1`, which was
+// wrong — code `1` is a Tax Invoice-Receipt (חשבונית מס-קבלה). The pre-payment
+// "חשבון עסקה" is `ProformaInvoice = 3`. `TransactionInvoice` is kept as a
+// deprecated alias for backwards compatibility; new code should use the
+// explicit names below.
 export const SUMIT_DOCUMENT_TYPE = {
+  Invoice: 0,                       // חשבונית מס
+  InvoiceAndReceipt: 1,             // חשבונית מס-קבלה
+  Receipt: 2,                       // קבלה
+  ProformaInvoice: 3,               // חשבון עסקה
+  DonationReceipt: 4,
+  CreditInvoice: 5,
+  CreditInvoiceAndReceipt: 6,
+  CreditReceipt: 7,
+  Order: 8,
+  DeliveryNote: 9,
+  GoodsReturnNote: 10,
+  PurchasingOrder: 11,
+  PriceQuotation: 12,               // הצעת מחיר
+  PaymentRequest: 13,
+  CreditDonationReceipt: 14,
+  ExpenseInvoiceReceipt: 15,
+  ExpenseInvoice: 16,
+  ExpenseReceipt: 17,
+  ExpenseRequest: 18,
+  CreditExpenseInvoiceReceipt: 19,
+  CreditExpenseInvoice: 20,
+  CreditExpenseReceipt: 21,
+  SupplierPayment: 22,
+  /** @deprecated Wrong in 0.3.0; was InvoiceAndReceipt. Use `ProformaInvoice` for חשבון עסקה. */
   TransactionInvoice: 1,
 } as const;
+
+// SUMIT language enum (`Accounting_Typed_Language`). The documents endpoint
+// expects a number, not a string.
+export const SUMIT_LANGUAGE = {
+  Hebrew: 0,
+  English: 1,
+  Arabic: 2,
+  Spanish: 3,
+} as const;
+
+const LANGUAGE_STRING_TO_CODE: Record<string, 0 | 1 | 2 | 3> = {
+  he: 0,
+  en: 1,
+  ar: 2,
+  es: 3,
+  hebrew: 0,
+  english: 1,
+  arabic: 2,
+  spanish: 3,
+};
 
 export interface SumitDiagnostic {
   hasData: boolean;
@@ -164,27 +213,31 @@ export interface CreateDocumentSendByEmail {
 export interface BuildCreateDocumentPayloadParams {
   companyId: number;
   apiKey: string;
-  // SUMIT document type code. Use SUMIT_DOCUMENT_TYPE.TransactionInvoice (1)
+  // SUMIT document type code. Use `SUMIT_DOCUMENT_TYPE.ProformaInvoice` (3)
   // for חשבון עסקה. Other codes from SUMIT's enum can be passed as plain numbers.
   documentType: number;
   customer: CreateDocumentCustomer;
   items: CreateDocumentItem[];
-  // Defaults to "ILS". Accepts the same shape as the charge endpoints but
-  // SUMIT documents take the literal string code, not the numeric one.
+  // Accepts the same shape as the charge endpoints. SUMIT's documents endpoint
+  // accepts the literal string code (`"ILS"` / `"USD"` / `"EUR"`).
   currency?: SumitCurrency;
   // Whether the UnitPrice values already include VAT. Defaults to true to
   // match SUMIT's API default; pass false if your items are net.
   vatIncluded?: boolean;
   vatPerItem?: boolean;
   vatRate?: number;
-  language?: string;
+  // Language. SUMIT expects a numeric code (`SUMIT_LANGUAGE.*`). For ergonomics
+  // this field also accepts the strings `"he"`/`"en"`/`"ar"`/`"es"` (and their
+  // full English names) and converts them. Unknown strings are dropped.
+  language?: number | "he" | "en" | "ar" | "es" | string;
   description?: string;
   externalReference?: string;
   date?: string;
   dueDate?: string;
   sendByEmail?: CreateDocumentSendByEmail;
   isDraft?: boolean;
-  responseLanguage?: string;
+  // Language for SUMIT's response messages. Same numeric enum as `language`.
+  responseLanguage?: number | "he" | "en" | "ar" | "es" | string;
 }
 
 type SumitCustomerSearchMode = 0 | 1 | 2;
@@ -211,7 +264,7 @@ export interface SumitCreateDocumentPayload {
       Original: boolean;
       SendAsPaymentRequest: boolean;
     };
-    Language?: string;
+    Language?: number;
     Currency?: "ILS" | "USD" | "EUR" | string;
     Description?: string;
     ExternalReference?: string;
@@ -232,11 +285,11 @@ export interface SumitCreateDocumentPayload {
       SearchMode: SumitCustomerSearchMode;
     };
   }>;
-  Payments: never[];
+  Payments?: never[];
   VATIncluded: boolean;
   VATPerItem?: boolean;
   VATRate?: number;
-  ResponseLanguage?: string;
+  ResponseLanguage?: number;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -305,17 +358,24 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
     throw new Error("buildCreateDocumentPayload: items[] must not be empty");
   }
 
+  // Derive SearchMode: if the caller didn't pick one, use 1 (find by SUMIT ID)
+  // when an `id` is supplied, 2 (upsert by ExternalIdentifier) when one is
+  // supplied, and 0 (create new) otherwise. Matches SUMIT's documented modes.
+  const derivedSearchMode: SumitCustomerSearchMode =
+    params.customer.searchMode ??
+    (params.customer.id ? 1 : params.customer.externalIdentifier ? 2 : 0);
+
   const customer = compact({
-    SearchMode: (params.customer.searchMode ?? 0) as SumitCustomerSearchMode,
-    Name: params.customer.name,
-    EmailAddress: params.customer.emailAddress,
-    Phone: params.customer.phone,
-    ExternalIdentifier: params.customer.externalIdentifier,
-    ID: params.customer.id,
-    CompanyNumber: params.customer.taxId,
-    Address: params.customer.address,
-    City: params.customer.city,
-    ZipCode: params.customer.zipCode,
+    SearchMode: derivedSearchMode,
+    Name: blankToUndefined(params.customer.name) ?? params.customer.name,
+    EmailAddress: blankToUndefined(params.customer.emailAddress),
+    Phone: blankToUndefined(params.customer.phone),
+    ExternalIdentifier: blankToUndefined(params.customer.externalIdentifier),
+    ID: blankToUndefined(params.customer.id),
+    CompanyNumber: blankToUndefined(params.customer.taxId),
+    Address: blankToUndefined(params.customer.address),
+    City: blankToUndefined(params.customer.city),
+    ZipCode: blankToUndefined(params.customer.zipCode),
     NoVAT: params.customer.noVAT,
   }) as SumitCreateDocumentPayload["Details"]["Customer"];
 
@@ -331,12 +391,12 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
     Type: params.documentType,
     Customer: customer,
     SendByEmail: sendByEmail,
-    Language: params.language,
+    Language: toLanguageCode(params.language),
     Currency: params.currency ? currencyToSumitString(params.currency) : undefined,
-    Description: params.description,
-    ExternalReference: params.externalReference,
-    Date: params.date,
-    DueDate: params.dueDate,
+    Description: blankToUndefined(params.description),
+    ExternalReference: blankToUndefined(params.externalReference),
+    Date: blankToUndefined(params.date),
+    DueDate: blankToUndefined(params.dueDate),
     IsDraft: params.isDraft,
   }) as SumitCreateDocumentPayload["Details"];
 
@@ -350,9 +410,9 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
       ...(item.vat !== undefined ? { VAT: item.vat } : {}),
       Item: compact({
         Name: item.name,
-        Description: item.description,
-        SKU: item.sku,
-        ExternalIdentifier: item.externalIdentifier,
+        Description: blankToUndefined(item.description),
+        SKU: blankToUndefined(item.sku),
+        ExternalIdentifier: blankToUndefined(item.externalIdentifier),
         SearchMode: 0 as SumitCustomerSearchMode,
       }) as SumitCreateDocumentPayload["Items"][number]["Item"],
     };
@@ -362,12 +422,26 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
     Credentials: { CompanyID: params.companyId, APIKey: params.apiKey },
     Details: details,
     Items: items,
-    Payments: [] as never[],
     VATIncluded: params.vatIncluded ?? true,
     VATPerItem: params.vatPerItem,
     VATRate: params.vatRate,
-    ResponseLanguage: params.responseLanguage,
+    ResponseLanguage: toLanguageCode(params.responseLanguage),
   }) as SumitCreateDocumentPayload;
+}
+
+function toLanguageCode(value: number | string | undefined): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const mapped = LANGUAGE_STRING_TO_CODE[trimmed.toLowerCase()];
+  return mapped;
+}
+
+function blankToUndefined(value: string | null | undefined): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
 }
 
 export function normalizeCreateDocumentResponse(response: unknown): NormalizedSumitEvent {

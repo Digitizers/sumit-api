@@ -350,7 +350,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 123,
       apiKey: "api-key",
-      documentType: SUMIT_DOCUMENT_TYPE.TransactionInvoice,
+      documentType: SUMIT_DOCUMENT_TYPE.ProformaInvoice,
       customer: {
         externalIdentifier: "client-1",
         name: "אקמה בע״מ",
@@ -378,15 +378,15 @@ describe("@deepclaw/sumit", () => {
     expect(payload).toEqual({
       Credentials: { CompanyID: 123, APIKey: "api-key" },
       Details: {
-        Type: 1,
+        Type: 3,
         Customer: {
-          SearchMode: 0,
+          SearchMode: 2, // derived from externalIdentifier
           Name: "אקמה בע״מ",
           EmailAddress: "billing@example.invalid",
           ExternalIdentifier: "client-1",
           CompanyNumber: "514999000",
         },
-        Language: "he",
+        Language: 0, // Hebrew
         Currency: "ILS",
       },
       Items: [
@@ -403,16 +403,125 @@ describe("@deepclaw/sumit", () => {
           Item: { Name: "שעות פיתוח", SearchMode: 0 },
         },
       ],
-      Payments: [],
       VATIncluded: false,
     });
+  });
+
+  it("omits Payments key entirely (SUMIT rejects empty Payments arrays on document creation)", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "Item", unitPrice: 10 }],
+    });
+    expect("Payments" in payload).toBe(false);
+  });
+
+  it("derives Customer.SearchMode: 0 default, 2 with externalIdentifier, 1 with id", () => {
+    const a = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "A" },
+      items: [{ name: "Item", unitPrice: 1 }],
+    });
+    expect(a.Details.Customer.SearchMode).toBe(0);
+
+    const b = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "B", externalIdentifier: "ext-1" },
+      items: [{ name: "Item", unitPrice: 1 }],
+    });
+    expect(b.Details.Customer.SearchMode).toBe(2);
+
+    const c = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C", id: "sumit-cust-1" },
+      items: [{ name: "Item", unitPrice: 1 }],
+    });
+    expect(c.Details.Customer.SearchMode).toBe(1);
+
+    const d = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "D", externalIdentifier: "ext-1", searchMode: 0 },
+      items: [{ name: "Item", unitPrice: 1 }],
+    });
+    expect(d.Details.Customer.SearchMode).toBe(0); // explicit caller value wins
+  });
+
+  it("converts language strings to SUMIT numeric enum and drops unknown values", () => {
+    const he = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "I", unitPrice: 1 }],
+      language: "he",
+    });
+    expect(he.Details.Language).toBe(0);
+
+    const en = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "I", unitPrice: 1 }],
+      language: "English",
+    });
+    expect(en.Details.Language).toBe(1);
+
+    const numeric = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "I", unitPrice: 1 }],
+      language: 2,
+    });
+    expect(numeric.Details.Language).toBe(2);
+
+    const unknown = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "I", unitPrice: 1 }],
+      language: "klingon",
+    });
+    expect(unknown.Details.Language).toBeUndefined();
+  });
+
+  it("trims whitespace and drops empty strings from customer/item optional fields", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: {
+        name: "C",
+        emailAddress: "  ",
+        phone: "",
+        taxId: "  514999000  ",
+      },
+      items: [{ name: "I", description: "", unitPrice: 10 }],
+    });
+    expect(payload.Details.Customer.EmailAddress).toBeUndefined();
+    expect(payload.Details.Customer.Phone).toBeUndefined();
+    expect(payload.Details.Customer.CompanyNumber).toBe("514999000");
+    expect(payload.Items[0].Item.Description).toBeUndefined();
   });
 
   it("includes SendByEmail when requested and maps currency strings", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 7,
       apiKey: "k",
-      documentType: 1,
+      documentType: 3,
       customer: { name: "C" },
       items: [{ name: "Item", unitPrice: 10 }],
       currency: "USD",
@@ -476,7 +585,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "super-secret",
-      documentType: 1,
+      documentType: 3,
       customer: { name: "C", emailAddress: "c@example.invalid" },
       items: [{ name: "Item", unitPrice: 10 }],
     });

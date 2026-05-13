@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-05-14
+
+### Fixed
+
+- `buildCreateDocumentPayload` no longer emits `Payments: []` — SUMIT rejected document-create requests that included an empty `Payments` array.
+- `Details.Language` is now sent as the numeric enum SUMIT requires (`Accounting_Typed_Language`: Hebrew=0, English=1, Arabic=2, Spanish=3) rather than the literal `"he"`/`"en"` string that returned `Details.Language: Error converting value "he"` from SUMIT.
+- `Customer.SearchMode` is now derived automatically: SUMIT id ⇒ `1`, ExternalIdentifier ⇒ `2`, otherwise `0`. Previously every request hardcoded `0`, which prevented customer upserts.
+- Empty / whitespace-only optional fields (`emailAddress`, `phone`, `taxId`, item `description`, `sku`, etc.) are now stripped rather than sent as `""` — SUMIT rejects empty strings on several optional fields.
+
+### Added
+
+- `SUMIT_DOCUMENT_TYPE` now exposes the full `Accounting_Typed_DocumentType` enum: `Invoice` (0), `InvoiceAndReceipt` (1), `Receipt` (2), `ProformaInvoice` (3), `PriceQuotation` (12), and all credit/expense variants.
+- `SUMIT_LANGUAGE` const exposing `Hebrew=0`, `English=1`, `Arabic=2`, `Spanish=3`.
+- `language` / `responseLanguage` params accept the shorthand strings `"he"`/`"en"`/`"ar"`/`"es"` (and full English names) in addition to numeric codes.
+
+### Changed
+
+- `SumitNormalizedEventType` and supporting types unchanged.
+- `SUMIT_DOCUMENT_TYPE.TransactionInvoice` is retained as a deprecated alias to `1` for backwards compatibility, but **its meaning was wrong in 0.3.0** — code `1` is `InvoiceAndReceipt` (חשבונית מס-קבלה), not the pre-payment "חשבון עסקה". Use `SUMIT_DOCUMENT_TYPE.ProformaInvoice` (3) for חשבון עסקה.
+
 ## [0.3.0] - 2026-05-13
 
 ### Added
