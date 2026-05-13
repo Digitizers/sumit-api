@@ -117,7 +117,7 @@ import { buildCreateDocumentPayload, SUMIT_DOCUMENT_TYPE } from "sumit-api";
 const payload = buildCreateDocumentPayload({
   companyId: 123,
   apiKey: process.env.SUMIT_API_KEY!,
-  documentType: SUMIT_DOCUMENT_TYPE.TransactionInvoice, // 1
+  documentType: SUMIT_DOCUMENT_TYPE.ProformaInvoice, // 3 — חשבון עסקה
   customer: {
     externalIdentifier: "client_42",
     name: "Acme Ltd",
@@ -135,7 +135,11 @@ const payload = buildCreateDocumentPayload({
 });
 ```
 
-`SUMIT_DOCUMENT_TYPE` only lists values this package has actively verified. SUMIT exposes many more document type codes — pass any number directly via the `documentType` field.
+`SUMIT_DOCUMENT_TYPE` covers SUMIT's `Accounting_Typed_DocumentType` enum — `Invoice` (0, חשבונית מס), `InvoiceAndReceipt` (1, חשבונית מס-קבלה), `Receipt` (2, קבלה), `ProformaInvoice` (3, חשבון עסקה), `PriceQuotation` (12, הצעת מחיר), credit/expense variants, and more. Pass any numeric code directly via `documentType` if needed.
+
+`language` accepts either a `SUMIT_LANGUAGE` numeric code or the shorthand strings `"he"`/`"en"`/`"ar"`/`"es"` (and their full English names) — the helper converts to the numeric enum SUMIT requires. Unknown strings are dropped silently.
+
+`customer.searchMode` is derived automatically when omitted: SUMIT id `1`, ExternalIdentifier `2`, otherwise `0` (create new). Pass an explicit value to override.
 
 ---
 

@@ -123,7 +123,7 @@ Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / 
 {
   Credentials: { CompanyID, APIKey },
   Details: {
-    Type: number,            // SUMIT document type code; 1 = חשבון עסקה
+    Type: number,            // SUMIT document type code; 3 = חשבון עסקה (ProformaInvoice)
     Customer: {
       SearchMode: 0 | 1 | 2, // 0 = match by ID (default for this endpoint)
       Name: string,
@@ -138,7 +138,7 @@ Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / 
       NoVAT?: boolean,
     },
     SendByEmail?: { EmailAddress, Original, SendAsPaymentRequest },
-    Language?: string,        // e.g. "he" / "en"
+    Language?: number,        // Accounting_Typed_Language enum: 0=Hebrew, 1=English, 2=Arabic, 3=Spanish
     Currency?: "ILS" | "USD" | "EUR",
     Description?: string,
     ExternalReference?: string,
@@ -159,11 +159,11 @@ Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / 
       SearchMode: 0 | 1 | 2,
     },
   }],
-  Payments: [],
+  // Payments omitted — SUMIT rejects empty Payments arrays on document creation.
   VATIncluded: boolean,
   VATPerItem?: boolean,
   VATRate?: number,
-  ResponseLanguage?: string,
+  ResponseLanguage?: number,
 }
 ```
 
