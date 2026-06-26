@@ -61,6 +61,51 @@ describe("@deepclaw/sumit", () => {
     });
   });
 
+  it("defers the first recurring charge when dateStart is set (free trial)", () => {
+    const payload = buildRecurringChargePayload({
+      companyId: 123,
+      apiKey: "api-key",
+      customer: {
+        externalIdentifier: "org-1",
+        name: "Acme",
+        emailAddress: "billing@example.invalid",
+      },
+      singleUseToken: "single-use-token",
+      item: {
+        name: "DeepClaw Pro Plan",
+        description: "Pro subscription - monthly",
+        unitPrice: 19,
+        currency: "USD",
+        durationMonths: 1,
+        dateStart: "2026-07-10",
+      },
+    });
+
+    expect(payload.Items[0].Date_Start).toBe("2026-07-10");
+  });
+
+  it("omits Date_Start when dateStart is not provided", () => {
+    const payload = buildRecurringChargePayload({
+      companyId: 123,
+      apiKey: "api-key",
+      customer: {
+        externalIdentifier: "org-1",
+        name: "Acme",
+        emailAddress: "billing@example.invalid",
+      },
+      singleUseToken: "single-use-token",
+      item: {
+        name: "DeepClaw Pro Plan",
+        description: "Pro subscription - monthly",
+        unitPrice: 19,
+        currency: "USD",
+        durationMonths: 1,
+      },
+    });
+
+    expect(payload.Items[0]).not.toHaveProperty("Date_Start");
+  });
+
   it("builds the SUMIT one-off charge payload without Duration_Months/Recurrence", () => {
     const payload = buildOneOffChargePayload({
       companyId: 123,

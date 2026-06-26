@@ -100,6 +100,12 @@ export interface OneOffChargeItem {
 export interface RecurringChargeItem extends OneOffChargeItem {
   durationMonths: number;
   recurrence?: number;
+  /**
+   * First payment date (`Date_Start`), JSON date format e.g. `2026-07-10`.
+   * Defaults to today when omitted. Set it in the future to defer the first
+   * charge — the card is tokenised now but not charged until then (free trial).
+   */
+  dateStart?: string;
 }
 
 export interface BuildOneOffChargePayloadParams extends BaseChargeParams {
@@ -151,6 +157,8 @@ export interface SumitRecurringChargePayload extends BaseChargePayload {
     Currency: 0 | 1 | 2;
     Duration_Months: number;
     Recurrence: number;
+    /** First payment date (YYYY-MM-DD). Omitted = charge today. */
+    Date_Start?: string;
   }>;
 }
 
@@ -348,6 +356,7 @@ export function buildRecurringChargePayload(params: BuildRecurringChargePayloadP
         Currency: currencyToSumitCode(params.item.currency),
         Duration_Months: params.item.durationMonths,
         Recurrence: params.item.recurrence ?? 0,
+        ...(params.item.dateStart ? { Date_Start: params.item.dateStart } : {}),
       },
     ],
   };

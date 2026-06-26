@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-26
+
+### Added
+
+- `RecurringChargeItem.dateStart` → emits `Items[].Date_Start` (SUMIT "First payment date", `YYYY-MM-DD`). Set it in the future to defer the first charge: the card is tokenised immediately but not charged until then, enabling a real free trial. Omitted ⇒ charged today (unchanged behaviour).
+
 ## [0.3.1] - 2026-05-14
 
 ### Fixed
