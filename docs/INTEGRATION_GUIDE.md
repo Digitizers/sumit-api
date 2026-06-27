@@ -27,6 +27,10 @@
 6. **`getpdf` returns the PDF *binary*** (`%PDF-…`), not a JSON URL. Stream it.
 7. **Receipt language**: `DocumentLanguage` — Hebrew=0, **English=1**, Arabic=2,
    Spanish=3.
+8. **SUMIT retries triggers**, so your idempotency gate must live **inside the same
+   DB transaction** as the billing writes — otherwise a crash mid-write leaves the
+   gate committed and the retry is rejected as a duplicate while the period never
+   advanced (sub stuck `TRIALING` after a real charge). See §6.
 
 ---
 
@@ -208,6 +212,22 @@ So the **one required trigger is the successful-recurring-charge view**. Skip
 "subscription created" (synchronous) and "cancellation" if cancels only originate
 in your app.
 
+**Cancellation model — make your app the source of truth.** Don't depend on a
+`recurring.cancelled` trigger (it may arrive view-shaped with no `EventType` and
+normalize to unmapped). Instead:
+
+- **App-initiated cancel:** call `recurring/cancel/` **and** update your DB in the
+  same request — synchronous, no trigger needed. Any echo trigger is redundant;
+  guard your handler so it doesn't downgrade a `cancelAtPeriodEnd` sub before its
+  period actually ends.
+- **SUMIT-autonomous cancel** (standing order dropped after repeated failed
+  charges, mandate/card revoked): you don't need the cancel trigger to catch it —
+  the failed charge already fires `payment.failed` → your dunning flips to
+  `PAST_DUE` → grace cron downgrades. Dunning drives it even if SUMIT stays silent.
+- **Out-of-band cancel in the SUMIT portal** is the only unobservable path → make
+  it an ops rule: *never cancel a standing order directly in SUMIT; always cancel
+  through the app.*
+
 ## 5. Receipt / invoice PDF — `POST /accounting/documents/getpdf/`
 
 Request: `{ Credentials, DocumentID, DocumentType?, DocumentNumber?, Original? }`.
@@ -232,6 +252,18 @@ const isPdf = new TextDecoder().decode(buf.slice(0, 5)).startsWith("%PDF");
   from the charge's unique id (`EntityID` / `PaymentID`). Derive it **after** the
   view→charge promotion so each charge's unique id is used (else all unmapped
   triggers collapse to one key and only the first processes).
+- **Transactional idempotency — put the gate INSIDE the transaction.** SUMIT
+  retries any trigger that didn't return 2xx. If you commit the gate row first and
+  *then* do the billing writes (invoice + advance the subscription) as separate
+  statements, a crash between them is unrecoverable: the gate is already committed,
+  so the retry is rejected as a **duplicate**, yet the period never advanced — the
+  sub is stuck `TRIALING` after a **real** charge (and a dunning cron may then drop
+  the paying customer to FREE). Wrap the gate `create` **and** every billing write
+  in **one DB transaction**. A failed attempt rolls the gate back with the work, so
+  the retry reprocesses cleanly; an already-committed event still short-circuits on
+  the unique constraint. Do **not** instead "reprocess when processedAt is null" —
+  the period-advance (`currentPeriodEnd += interval`) is not idempotent and would
+  double-advance.
 - **Trial-conversion safety net**: a cron that flips a `TRIALING` sub past its
   trial end to `PAST_DUE` *only if* no PAID invoice exists, with a ~2-day grace to
   absorb charge-settlement + trigger lag — and re-check for a current-period PAID
@@ -254,5 +286,6 @@ const isPdf = new TextDecoder().decode(buf.slice(0, 5)).startsWith("%PDF");
 | card charged on day 0 despite "trial" | no `Date_Start` sent | send `Date_Start` |
 | every trigger `401 missing or invalid signature` | base64 secret `+`→space in `?secret=` | URL-encode / restore `+` |
 | trigger `200` but no invoice; log "Unmapped trigger" | view-shaped payload, no `EventType` | id-match promotion (§4c) |
+| sub stuck `TRIALING` after a real charge; retry says "duplicate" | idempotency gate committed before the billing writes; crash between them | gate `create` inside the same transaction as the writes (§6) |
 | PDF: `Unexpected token '%' … not valid JSON` | `getpdf` returns the PDF binary | stream `arrayBuffer()` |
 | receipts in Hebrew | default company language | `DocumentLanguage: 1` |
