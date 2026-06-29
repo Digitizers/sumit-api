@@ -188,8 +188,14 @@ Don't parse by field name. Instead:
    view-shaped ones come back `sumit.trigger.unmapped`.
 3. For an unmapped **view record**, **collect every `ID`** in the payload
    (`EntityID` + each `Properties.*[].ID`) and **match against a known
-   subscription** by `sumitCustomerId` **or** `sumitRecurringId`. A match ⇒ it's a
-   real charge for that org ⇒ promote to `recurring.charged`:
+   subscription**. **Match on `sumitRecurringId` (the recurring-item id) — not on
+   `sumitCustomerId` alone.** A customer-id-only match is unsafe: the configured
+   view can include *any* successful charge for that customer (a one-off invoice,
+   a different product), so matching the customer id would promote an unrelated
+   payment to `recurring.charged`. Require a recurring marker: the payload's id
+   set must contain the subscription's `sumitRecurringId` (or you must otherwise
+   verify the charge is the recurring item). Only then ⇒ promote to
+   `recurring.charged`:
    - **amount/currency from *your* subscription** (never the view's ambiguous
      fields),
    - **`EntityID`** = the unique per-charge id → use it as the invoice payment id
@@ -230,9 +236,12 @@ normalize to unmapped). Instead:
 
 ## 5. Receipt / invoice PDF — `POST /accounting/documents/getpdf/`
 
-Request: `{ Credentials, DocumentID, DocumentType?, DocumentNumber?, Original? }`.
-**The response is the PDF *binary*** (starts with `%PDF`), **not** JSON with a
-URL. Stream it back:
+Request: `{ Credentials, Original, DocumentID? , DocumentType?, DocumentNumber? }`.
+**`Original` is required** by SUMIT's `getpdf` request schema — omitting it gets
+the request rejected before any PDF is streamed (send `Original: true` for the
+original document). Identify the document with **either** `DocumentID` **or** the
+`DocumentType` + `DocumentNumber` pair. **The response is the PDF *binary***
+(starts with `%PDF`), **not** JSON with a URL. Stream it back:
 
 ```ts
 const buf = await res.arrayBuffer();
