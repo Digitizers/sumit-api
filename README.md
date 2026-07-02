@@ -137,6 +137,8 @@ const payload = buildCreateDocumentPayload({
 
 `SUMIT_DOCUMENT_TYPE` covers SUMIT's `Accounting_Typed_DocumentType` enum — `Invoice` (0, חשבונית מס), `InvoiceAndReceipt` (1, חשבונית מס-קבלה), `Receipt` (2, קבלה), `ProformaInvoice` (3, חשבון עסקה), `PriceQuotation` (12, הצעת מחיר), credit/expense variants, and more. Pass any numeric code directly via `documentType` if needed.
 
+> **Payment-bearing document types are out of scope for this builder.** It never sends `Payments` rows, so types that record a received payment — `Receipt` (2) and `InvoiceAndReceipt` (1) — will be rejected by SUMIT or issued without the payment they're supposed to document. Issue those through the charge endpoints (a successful charge creates the document) or from the SUMIT UI.
+
 `language` accepts either a `SUMIT_LANGUAGE` numeric code or the shorthand strings `"he"`/`"en"`/`"ar"`/`"es"` (and their full English names) — the helper converts to the numeric enum SUMIT requires. Unknown strings are dropped silently.
 
 `customer.searchMode` is derived automatically when omitted: SUMIT id `1`, ExternalIdentifier `2`, otherwise `0` (create new). Pass an explicit value to override.
