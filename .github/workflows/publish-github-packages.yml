@@ -22,6 +22,8 @@ concurrency:
 
 jobs:
   publish:
+    # workflow_dispatch can be launched from any ref — only main may publish.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,11 +33,12 @@ jobs:
         with:
           version: 10.26.0
 
+      # No registry-url here: install must resolve from npmjs. The publish step
+      # below configures the GitHub Packages registry and auth itself.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://npm.pkg.github.com
 
       - name: Install
         run: pnpm install --frozen-lockfile
