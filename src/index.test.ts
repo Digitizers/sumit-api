@@ -210,14 +210,14 @@ describe("@deepclaw/sumit", () => {
       eventType: "payment.failed",
       status: "Failed",
       userErrorMessage: "Payment failed",
-      technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד [REDACTED])",
+      technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד Upay_[REDACTED])",
       diagnostic: {
         hasData: false,
         dataKeys: [],
         hasCustomerID: false,
         recurringItemCount: 0,
         userErrorMessage: "Payment failed",
-        technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד [REDACTED])",
+        technicalErrorDetails: "הסכום נמוך מדי יש להקליד סכום גבוה יותר. (קוד Upay_[REDACTED])",
       },
     });
   });
@@ -656,5 +656,31 @@ describe("@deepclaw/sumit", () => {
     }) as { TechnicalErrorDetails: string };
     expect(redacted.TechnicalErrorDetails).not.toContain("987654321");
     expect(redacted.TechnicalErrorDetails).not.toContain("123456789");
+  });
+
+  it("ignores empty urlencoded keys instead of throwing", () => {
+    const form = new URLSearchParams("=x&Payment.Status=000&Payment.ValidPayment=true");
+    const event = normalizeSumitIncomingPayload(form);
+    expect(event.eventType).toBe("payment.succeeded");
+  });
+
+  it("classifies a failure whose only signal is a redacted Upay_* code", () => {
+    const event = normalizeChargeResponse({ TechnicalErrorDetails: "Upay_30001419" });
+    expect(event.ok).toBe(false);
+    expect(event.eventType).toBe("payment.failed");
+    expect(event.technicalErrorDetails).not.toContain("30001419");
+  });
+
+  it("derives SearchMode from trimmed customer ids", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C", id: "   ", externalIdentifier: "ext-1" },
+      items: [{ name: "Item", unitPrice: 10 }],
+    });
+    expect(payload.Details.Customer.SearchMode).toBe(2);
+    expect(payload.Details.Customer.ID).toBeUndefined();
+    expect(payload.Details.Customer.ExternalIdentifier).toBe("ext-1");
   });
 });

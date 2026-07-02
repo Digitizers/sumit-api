@@ -21,6 +21,8 @@ concurrency:
 
 jobs:
   publish:
+    # workflow_dispatch can be launched from any ref — only main may publish.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

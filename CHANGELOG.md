@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `normalizeSumitIncomingPayload` no longer throws on urlencoded payloads that contain an empty key (e.g. `=x`) — malformed or hostile form input falls through to normal handling instead of a `TypeError`.
+- `redactSensitiveText` masks processor codes as `Upay_[REDACTED]` instead of `[REDACTED]`, so failure classification keeps seeing the processor signal after redaction. Responses whose only failure indicator is an `Upay_*` code surface as `payment.failed` again instead of `sumit.trigger.unmapped`.
+- `buildCreateDocumentPayload` derives `SearchMode` from the blank-stripped customer identifiers — a whitespace-only `id` no longer selects search-by-ID while `ID` is omitted from the payload, which skipped a valid `ExternalIdentifier` upsert.
+
+### Documentation
+
+- README documents that the create-document builder never sends `Payments` rows, so payment-bearing document types (`Receipt`, `InvoiceAndReceipt`) should be issued via the charge endpoints or the SUMIT UI.
+
 ## [0.4.0] - 2026-06-26
 
 ### Added

@@ -370,17 +370,20 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
   // Derive SearchMode: if the caller didn't pick one, use 1 (find by SUMIT ID)
   // when an `id` is supplied, 2 (upsert by ExternalIdentifier) when one is
   // supplied, and 0 (create new) otherwise. Matches SUMIT's documented modes.
+  // Derived from the blank-stripped values so a whitespace-only `id` cannot select
+  // mode 1 while `compact` drops the `ID` field from the payload.
+  const customerId = blankToUndefined(params.customer.id);
+  const customerExternalIdentifier = blankToUndefined(params.customer.externalIdentifier);
   const derivedSearchMode: SumitCustomerSearchMode =
-    params.customer.searchMode ??
-    (params.customer.id ? 1 : params.customer.externalIdentifier ? 2 : 0);
+    params.customer.searchMode ?? (customerId ? 1 : customerExternalIdentifier ? 2 : 0);
 
   const customer = compact({
     SearchMode: derivedSearchMode,
     Name: blankToUndefined(params.customer.name) ?? params.customer.name,
     EmailAddress: blankToUndefined(params.customer.emailAddress),
     Phone: blankToUndefined(params.customer.phone),
-    ExternalIdentifier: blankToUndefined(params.customer.externalIdentifier),
-    ID: blankToUndefined(params.customer.id),
+    ExternalIdentifier: customerExternalIdentifier,
+    ID: customerId,
     CompanyNumber: blankToUndefined(params.customer.taxId),
     Address: blankToUndefined(params.customer.address),
     City: blankToUndefined(params.customer.city),
@@ -635,7 +638,9 @@ export function redactSensitiveText(value: string): string {
     .replace(/(singleuse)?token\s*[:=]\s*[^\s;,]+/gi, "$1token=[REDACTED]")
     .replace(/api\s*key\s*[:=]\s*[^\s;,]+/gi, "api key=[REDACTED]")
     .replace(/card(number)?\s*[:=]\s*[^\s;,]+/gi, "card$1=[REDACTED]")
-    .replace(/\bUpay_\w+/gi, "[REDACTED]")
+    // Keep the `Upay_` marker: isFailedStatus classifies failures by it, and the
+    // sensitive part is the specific processor code, not the processor name.
+    .replace(/\bUpay_\w+/gi, "Upay_[REDACTED]")
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[REDACTED]")
     .replace(/\b\d{12,19}\b/g, "[REDACTED]")
     .replace(/((?:citizen(?:[\s_]*id)?|ת\.ז\.?|מ\.ז\.?)\W*)\d{9}\b/gi, "$1[REDACTED]");
@@ -703,6 +708,9 @@ function formToNestedObject(form: URLSearchParams): UnknownRecord {
         return [{ name, index: undefined as number | undefined }, ...indices.map((index) => ({ name: "", index }))];
       });
 
+    // An empty key (e.g. `new URLSearchParams("=x")`) yields no segments — skip it
+    // instead of letting `assign` index into `undefined` and throw on hostile input.
+    if (segments.length === 0) continue;
     if (segments.some((segment) => segment.index === undefined && FORBIDDEN_FORM_KEYS.has(segment.name))) continue;
 
     let current: UnknownRecord | unknown[] = root;
