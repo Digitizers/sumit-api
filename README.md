@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/npm/l/sumit-api.svg)](LICENSE)
 [![zero deps](https://img.shields.io/badge/runtime%20deps-0-success)](package.json)
 
-> Pure TypeScript helpers for [SUMIT](https://sumit.co.il) (formerly **OfficeGuy**) recurring billing and trigger webhooks. SUMIT routes card clearing through partner processors such as **Upay**, and their error codes surface in SUMIT responses — this package handles SUMIT's request/response shapes and redacts those upstream codes before they hit your logs. **Zero runtime dependencies.**
+> Pure TypeScript helpers for [SUMIT](https://digitizer.li/sumit) (formerly **OfficeGuy**) recurring billing and trigger webhooks. SUMIT routes card clearing through partner processors such as **Upay**, and their error codes surface in SUMIT responses — this package handles SUMIT's request/response shapes and redacts those upstream codes before they hit your logs. **Zero runtime dependencies.**
 
 Companion package: [`sumit-react`](https://github.com/Digitizers/sumit-react) — `<SumitCheckout />` plus Next.js charge and webhook route helpers.
 
