@@ -261,6 +261,12 @@ The build emits ESM with `.d.ts` declarations to `dist/`. Source lives in `src/`
 
 ---
 
+## Provenance
+
+Built against SUMIT's documented REST API — <https://app.sumit.co.il/developers/api/>. Handling of processor-level (`Upay_*`) identifiers and error codes is based on observed live SUMIT responses; no third-party code was copied. The browser-side checkout surface lives in the companion package [`sumit-react`](https://github.com/Digitizers/sumit-react), which documents its own provenance separately.
+
+---
+
 ## License
 
 [MIT](LICENSE)
