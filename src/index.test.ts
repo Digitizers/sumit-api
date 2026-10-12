@@ -9,6 +9,7 @@ import {
   normalizeRecurringChargeResponse,
   normalizeSumitIncomingPayload,
   redactSumitPayload,
+  SUMIT_CUSTOMER_SEARCH_MODE,
   SUMIT_DOCUMENT_TYPE,
 } from "./index";
 
@@ -493,7 +494,7 @@ describe("@deepclaw/sumit", () => {
       apiKey: "k",
       vatIncluded: true,
       documentType: 3,
-      customer: { name: "C", id: "sumit-cust-1" },
+      customer: { name: "C", id: "4711" },
       items: [{ name: "Item", unitPrice: 1 }],
     });
     expect(c.Details.Customer.SearchMode).toBe(1);
@@ -507,6 +508,62 @@ describe("@deepclaw/sumit", () => {
       items: [{ name: "Item", unitPrice: 1 }],
     });
     expect(d.Details.Customer.SearchMode).toBe(0); // explicit caller value wins
+  });
+
+  it("sends Customer.ID as a number, whether given as a number or a numeric string", () => {
+    const build = (id: unknown) =>
+      buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        vatIncluded: true,
+        documentType: 3,
+        customer: { name: "C", id } as never,
+        items: [{ name: "Item", unitPrice: 1 }],
+      });
+
+    expect(build("4711").Details.Customer.ID).toBe(4711);
+    expect(build(" 4711 ").Details.Customer.ID).toBe(4711);
+    expect(build(4711).Details.Customer.ID).toBe(4711);
+    expect(build(4711).Details.Customer.SearchMode).toBe(SUMIT_CUSTOMER_SEARCH_MODE.None);
+  });
+
+  it("rejects a customer id that is not a positive integer", () => {
+    const build = (id: unknown) =>
+      buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        vatIncluded: true,
+        documentType: 3,
+        customer: { name: "C", id } as never,
+        items: [{ name: "Item", unitPrice: 1 }],
+      });
+
+    for (const id of ["sumit-cust-1", "12a", "1.5", "-3", "1e3", "0", 0, -1, 1.5, Number.NaN, 2 ** 60]) {
+      expect(() => build(id), String(id)).toThrow(/customer\.id must be the numeric SUMIT customer ID/);
+    }
+  });
+
+  it("passes through every SUMIT customer search mode", () => {
+    expect(SUMIT_CUSTOMER_SEARCH_MODE).toEqual({
+      Automatic: 0,
+      None: 1,
+      ExternalIdentifier: 2,
+      Name: 3,
+      CompanyNumber: 4,
+      Phone: 5,
+      EmailAddress: 6,
+    });
+    for (const searchMode of Object.values(SUMIT_CUSTOMER_SEARCH_MODE)) {
+      const payload = buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        vatIncluded: true,
+        documentType: 3,
+        customer: { name: "C", emailAddress: "c@example.invalid", searchMode },
+        items: [{ name: "Item", unitPrice: 1 }],
+      });
+      expect(payload.Details.Customer.SearchMode).toBe(searchMode);
+    }
   });
 
   it("converts language strings to SUMIT numeric enum and drops unknown values", () => {
