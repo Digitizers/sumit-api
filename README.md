@@ -68,6 +68,7 @@ const payload = buildOneOffChargePayload({
     emailAddress: "billing@example.com",
   },
   singleUseToken: "[single-use-token-from-client]",
+  vatIncluded: true, // required: unitPrice is the amount the customer pays
   item: {
     name: "Setup fee",
     description: "One-time onboarding charge",
@@ -76,6 +77,8 @@ const payload = buildOneOffChargePayload({
   },
 });
 ```
+
+> **`vatIncluded` is required and has no default**, in the charge builders and in the create-document builder. `true` means the prices you pass already include VAT; `false` means they are net and SUMIT adds VAT on top. SUMIT's own default for an omitted `VATIncluded` is `false`, and versions of this package before 0.5.0 sent `true` when the flag was left out, so a net price list produced a total without VAT and no error. The builders now throw when the flag is missing.
 
 `POST` this body to `https://api.sumit.co.il/billing/payments/charge/`. The response uses the same shape recurring charges return, so [`normalizeChargeResponse`](#normalize-a-charge-response) handles both — a one-off success surfaces as `eventType: "payment.succeeded"` (no `recurringItemId`).
 
@@ -95,6 +98,7 @@ const payload = buildRecurringChargePayload({
     emailAddress: "billing@example.com",
   },
   singleUseToken: "[single-use-token-from-client]",
+  vatIncluded: true, // required: unitPrice is the amount the customer pays
   item: {
     name: "Pro Plan",
     description: "Pro subscription — monthly",
@@ -129,7 +133,7 @@ const payload = buildCreateDocumentPayload({
     { name: "Development hours", unitPrice: 300, quantity: 8 },
   ],
   currency: "ILS",
-  vatIncluded: false, // unit prices are net; SUMIT adds VAT
+  vatIncluded: false, // required: unit prices are net; SUMIT adds VAT
   language: "he",
   sendByEmail: { emailAddress: "billing@example.com" }, // optional
 });

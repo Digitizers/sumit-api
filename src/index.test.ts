@@ -17,6 +17,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildRecurringChargePayload({
       companyId: 123,
       apiKey: "api-key",
+      vatIncluded: true,
       customer: {
         externalIdentifier: "org-1",
         name: "Acme",
@@ -65,6 +66,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildRecurringChargePayload({
       companyId: 123,
       apiKey: "api-key",
+      vatIncluded: true,
       customer: {
         externalIdentifier: "org-1",
         name: "Acme",
@@ -88,6 +90,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildRecurringChargePayload({
       companyId: 123,
       apiKey: "api-key",
+      vatIncluded: true,
       customer: {
         externalIdentifier: "org-1",
         name: "Acme",
@@ -456,6 +459,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C" },
       items: [{ name: "Item", unitPrice: 10 }],
@@ -467,6 +471,7 @@ describe("@deepclaw/sumit", () => {
     const a = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "A" },
       items: [{ name: "Item", unitPrice: 1 }],
@@ -476,6 +481,7 @@ describe("@deepclaw/sumit", () => {
     const b = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "B", externalIdentifier: "ext-1" },
       items: [{ name: "Item", unitPrice: 1 }],
@@ -485,6 +491,7 @@ describe("@deepclaw/sumit", () => {
     const c = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C", id: "sumit-cust-1" },
       items: [{ name: "Item", unitPrice: 1 }],
@@ -494,6 +501,7 @@ describe("@deepclaw/sumit", () => {
     const d = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "D", externalIdentifier: "ext-1", searchMode: 0 },
       items: [{ name: "Item", unitPrice: 1 }],
@@ -505,6 +513,7 @@ describe("@deepclaw/sumit", () => {
     const he = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C" },
       items: [{ name: "I", unitPrice: 1 }],
@@ -515,6 +524,7 @@ describe("@deepclaw/sumit", () => {
     const en = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C" },
       items: [{ name: "I", unitPrice: 1 }],
@@ -525,6 +535,7 @@ describe("@deepclaw/sumit", () => {
     const numeric = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C" },
       items: [{ name: "I", unitPrice: 1 }],
@@ -535,6 +546,7 @@ describe("@deepclaw/sumit", () => {
     const unknown = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C" },
       items: [{ name: "I", unitPrice: 1 }],
@@ -547,6 +559,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: {
         name: "C",
@@ -566,6 +579,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 7,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C" },
       items: [{ name: "Item", unitPrice: 10 }],
@@ -586,11 +600,71 @@ describe("@deepclaw/sumit", () => {
       buildCreateDocumentPayload({
         companyId: 1,
         apiKey: "k",
+        vatIncluded: true,
         documentType: 1,
         customer: { name: "C" },
         items: [],
       }),
     ).toThrow(/items\[\] must not be empty/);
+  });
+
+  it("refuses to build a payload when vatIncluded is omitted, instead of guessing", () => {
+    const charge = {
+      companyId: 1,
+      apiKey: "k",
+      customer: { externalIdentifier: "org-1", name: "C", emailAddress: "billing@example.invalid" },
+      singleUseToken: "t",
+    };
+    const item = { name: "Item", description: "D", unitPrice: 10, currency: "ILS" as const };
+
+    // Casts stand in for plain-JavaScript callers; the types reject these calls.
+    expect(() => buildOneOffChargePayload({ ...charge, item } as never)).toThrow(
+      /buildOneOffChargePayload: vatIncluded is required/,
+    );
+    expect(() => buildRecurringChargePayload({ ...charge, item: { ...item, durationMonths: 1 } } as never)).toThrow(
+      /buildRecurringChargePayload: vatIncluded is required/,
+    );
+    expect(() =>
+      buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        documentType: 3,
+        customer: { name: "C" },
+        items: [{ name: "Item", unitPrice: 10 }],
+      } as never),
+    ).toThrow(/buildCreateDocumentPayload: vatIncluded is required/);
+    expect(() =>
+      buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        vatIncluded: "false",
+        documentType: 3,
+        customer: { name: "C" },
+        items: [{ name: "Item", unitPrice: 10 }],
+      } as never),
+    ).toThrow(/vatIncluded is required/);
+  });
+
+  it("sends VATIncluded exactly as the caller chose it", () => {
+    const base = {
+      companyId: 1,
+      apiKey: "k",
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "Item", unitPrice: 10 }],
+    };
+    expect(buildCreateDocumentPayload({ ...base, vatIncluded: true }).VATIncluded).toBe(true);
+    expect(buildCreateDocumentPayload({ ...base, vatIncluded: false }).VATIncluded).toBe(false);
+
+    const recurring = buildRecurringChargePayload({
+      companyId: 1,
+      apiKey: "k",
+      vatIncluded: false,
+      customer: { externalIdentifier: "org-1", name: "C", emailAddress: "billing@example.invalid" },
+      singleUseToken: "t",
+      item: { name: "Item", description: "D", unitPrice: 10, currency: "ILS", durationMonths: 1 },
+    });
+    expect(recurring.VATIncluded).toBe(false);
   });
 
   it("normalizes a successful /accounting/documents/create/ response", () => {
@@ -630,6 +704,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "super-secret",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C", emailAddress: "c@example.invalid" },
       items: [{ name: "Item", unitPrice: 10 }],
@@ -675,6 +750,7 @@ describe("@deepclaw/sumit", () => {
     const payload = buildCreateDocumentPayload({
       companyId: 1,
       apiKey: "k",
+      vatIncluded: true,
       documentType: 3,
       customer: { name: "C", id: "   ", externalIdentifier: "ext-1" },
       items: [{ name: "Item", unitPrice: 10 }],

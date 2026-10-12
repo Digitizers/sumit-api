@@ -84,7 +84,13 @@ interface BaseChargeParams {
     emailAddress: string;
   };
   singleUseToken: string;
-  vatIncluded?: boolean;
+  /**
+   * Whether `unitPrice` already includes VAT. Required, with no default:
+   * SUMIT treats an omitted `VATIncluded` as `false` and adds VAT on top,
+   * while this package used to send `true`. A wrong guess changes the
+   * charged amount without any error, so the caller has to choose.
+   */
+  vatIncluded: boolean;
   onlyDocument?: boolean;
   authoriseOnly?: boolean;
 }
@@ -229,9 +235,13 @@ export interface BuildCreateDocumentPayloadParams {
   // Accepts the same shape as the charge endpoints. SUMIT's documents endpoint
   // accepts the literal string code (`"ILS"` / `"USD"` / `"EUR"`).
   currency?: SumitCurrency;
-  // Whether the UnitPrice values already include VAT. Defaults to true to
-  // match SUMIT's API default; pass false if your items are net.
-  vatIncluded?: boolean;
+  /**
+   * Whether the `unitPrice` values already include VAT. Required, with no
+   * default: SUMIT treats an omitted `VATIncluded` as `false` and adds VAT on
+   * top, while this package used to send `true`. A wrong guess changes the
+   * document total without any error, so the caller has to choose.
+   */
+  vatIncluded: boolean;
   vatPerItem?: boolean;
   vatRate?: number;
   // Language. SUMIT expects a numeric code (`SUMIT_LANGUAGE.*`). For ergonomics
@@ -326,7 +336,7 @@ export function currencyFromSumitCode(currency: unknown): "ILS" | "USD" | "EUR" 
 
 export function buildOneOffChargePayload(params: BuildOneOffChargePayloadParams): SumitOneOffChargePayload {
   return {
-    ...baseChargeEnvelope(params),
+    ...baseChargeEnvelope("buildOneOffChargePayload", params),
     Items: [
       {
         Item: {
@@ -343,7 +353,7 @@ export function buildOneOffChargePayload(params: BuildOneOffChargePayloadParams)
 
 export function buildRecurringChargePayload(params: BuildRecurringChargePayloadParams): SumitRecurringChargePayload {
   return {
-    ...baseChargeEnvelope(params),
+    ...baseChargeEnvelope("buildRecurringChargePayload", params),
     Items: [
       {
         Item: {
@@ -366,6 +376,7 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
   if (!params.items.length) {
     throw new Error("buildCreateDocumentPayload: items[] must not be empty");
   }
+  const vatIncluded = requireVatIncluded("buildCreateDocumentPayload", params.vatIncluded);
 
   // Derive SearchMode: if the caller didn't pick one, use 1 (find by SUMIT ID)
   // when an `id` is supplied, 2 (upsert by ExternalIdentifier) when one is
@@ -434,7 +445,7 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
     Credentials: { CompanyID: params.companyId, APIKey: params.apiKey },
     Details: details,
     Items: items,
-    VATIncluded: params.vatIncluded ?? true,
+    VATIncluded: vatIncluded,
     VATPerItem: params.vatPerItem,
     VATRate: params.vatRate,
     ResponseLanguage: toLanguageCode(params.responseLanguage),
@@ -509,7 +520,20 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function baseChargeEnvelope(params: BaseChargeParams): BaseChargePayload {
+// The type already requires the flag; this guards callers that reach the
+// builders from plain JavaScript or through a cast, where an omitted flag
+// would otherwise turn into a silently wrong amount.
+function requireVatIncluded(builder: string, value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `${builder}: vatIncluded is required. Pass true when the prices already include VAT, false when SUMIT should add VAT on top.`,
+    );
+  }
+  return value;
+}
+
+function baseChargeEnvelope(builder: string, params: BaseChargeParams): BaseChargePayload {
+  const vatIncluded = requireVatIncluded(builder, params.vatIncluded);
   return {
     Credentials: {
       CompanyID: params.companyId,
@@ -522,7 +546,7 @@ function baseChargeEnvelope(params: BaseChargeParams): BaseChargePayload {
       EmailAddress: params.customer.emailAddress,
     },
     SingleUseToken: params.singleUseToken,
-    VATIncluded: params.vatIncluded ?? true,
+    VATIncluded: vatIncluded,
     OnlyDocument: params.onlyDocument ?? false,
     ...(params.authoriseOnly ? { AuthoriseOnly: true as const } : {}),
   };
