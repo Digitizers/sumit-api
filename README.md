@@ -145,7 +145,9 @@ const payload = buildCreateDocumentPayload({
 
 `language` accepts either a `SUMIT_LANGUAGE` numeric code or the shorthand strings `"he"`/`"en"`/`"ar"`/`"es"` (and their full English names) — the helper converts to the numeric enum SUMIT requires. Unknown strings are dropped silently.
 
-`customer.searchMode` is derived automatically when omitted: SUMIT id `1`, ExternalIdentifier `2`, otherwise `0` (create new). Pass an explicit value to override.
+`customer.searchMode` takes a value of `SUMIT_CUSTOMER_SEARCH_MODE` (SUMIT's `Accounting_Typed_CustomerSearchMode`: `Automatic` 0, `None` 1, `ExternalIdentifier` 2, `Name` 3, `CompanyNumber` 4, `Phone` 5, `EmailAddress` 6). When omitted it is derived: `None` with a SUMIT `id` (SUMIT takes the customer from the ID, no search), `ExternalIdentifier` with an external identifier, `Automatic` otherwise. Pass an explicit value to override.
+
+`customer.id` is the numeric SUMIT customer ID. A number or a numeric string is accepted and sent as a number, which is what SUMIT's schema asks for; anything else throws.
 
 ---
 

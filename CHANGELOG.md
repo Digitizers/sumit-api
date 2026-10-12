@@ -7,6 +7,15 @@ All notable changes to this package are documented in this file. The format is b
 ### Changed
 
 - **Breaking:** `vatIncluded` is now required in `buildOneOffChargePayload`, `buildRecurringChargePayload` and `buildCreateDocumentPayload`, and the builders throw when it is not a boolean. Before, an omitted flag was sent as `VATIncluded: true`, the opposite of SUMIT's own default (its published schema: "Leave empty for false"). A caller that followed SUMIT's documentation, passed net prices and left the flag out got a document or a charge whose total left the VAT out, with no error. To keep the previous behaviour, pass `vatIncluded: true`; if your prices are net, pass `vatIncluded: false`.
+- **Breaking:** `buildCreateDocumentPayload` sends `Details.Customer.ID` as a number, as SUMIT's schema types it (`int64`), and throws when `customer.id` is not a positive integer. `customer.id` accepts `number | string`; a numeric string is converted. Before, the value was sent as whatever string the caller passed.
+
+### Added
+
+- `SUMIT_CUSTOMER_SEARCH_MODE` and the exported type `SumitCustomerSearchMode`, covering all seven values of SUMIT's `Accounting_Typed_CustomerSearchMode`. `customer.searchMode` was typed `0 | 1 | 2`, so search by name, company number, phone or email could not be requested.
+
+### Fixed
+
+- The comments and docs on the customer search mode described mode 0 as "create new" and as "match by ID only", and mode 1 as "always create new customer". Per SUMIT's schema they are `Automatic` and `None`. The values the builder derives are unchanged.
 
 ## [0.4.1] - 2026-07-03
 

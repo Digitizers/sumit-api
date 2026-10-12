@@ -205,17 +205,19 @@ export interface CreateDocumentCustomer {
   emailAddress?: string;
   phone?: string;
   externalIdentifier?: string;
-  // SUMIT internal customer ID (when known).
-  id?: string;
+  // SUMIT internal customer ID (when known). SUMIT types it as an integer, so
+  // a numeric string is converted and anything else is rejected.
+  id?: number | string;
   // Mapped to CompanyNumber — Israeli ת.ז. / ח.פ.
   taxId?: string;
   address?: string;
   city?: string;
   zipCode?: string;
   noVAT?: boolean;
-  // SUMIT customer search mode. 0 = match by ID only (default for this endpoint),
-  // 2 = upsert by ExternalIdentifier (matches the charge endpoints).
-  searchMode?: 0 | 1 | 2;
+  // How SUMIT should look for an existing customer (`SUMIT_CUSTOMER_SEARCH_MODE`).
+  // Derived when omitted: `None` with an `id`, `ExternalIdentifier` with one,
+  // `Automatic` otherwise.
+  searchMode?: SumitCustomerSearchMode;
 }
 
 export interface CreateDocumentSendByEmail {
@@ -258,7 +260,27 @@ export interface BuildCreateDocumentPayloadParams {
   responseLanguage?: number | "he" | "en" | "ar" | "es" | string;
 }
 
-type SumitCustomerSearchMode = 0 | 1 | 2;
+/**
+ * SUMIT's `Accounting_Typed_CustomerSearchMode`, as published in its schema.
+ * `None` runs no search: with `Customer.ID` SUMIT uses that customer, and
+ * its schema says an empty `ID` creates a new one. How `Automatic` matches
+ * a customer is not documented by SUMIT.
+ */
+export const SUMIT_CUSTOMER_SEARCH_MODE = {
+  Automatic: 0,
+  None: 1,
+  ExternalIdentifier: 2,
+  Name: 3,
+  CompanyNumber: 4,
+  Phone: 5,
+  EmailAddress: 6,
+} as const;
+
+export type SumitCustomerSearchMode = (typeof SUMIT_CUSTOMER_SEARCH_MODE)[keyof typeof SUMIT_CUSTOMER_SEARCH_MODE];
+
+// Income items have their own search-mode enum in SUMIT's schema; the builder
+// only ever sends Automatic.
+type SumitIncomeItemSearchModeAutomatic = 0;
 
 export interface SumitCreateDocumentPayload {
   Credentials: { CompanyID: number; APIKey: string };
@@ -270,7 +292,7 @@ export interface SumitCreateDocumentPayload {
       EmailAddress?: string;
       Phone?: string;
       ExternalIdentifier?: string;
-      ID?: string;
+      ID?: number;
       CompanyNumber?: string;
       Address?: string;
       City?: string;
@@ -300,7 +322,7 @@ export interface SumitCreateDocumentPayload {
       Description?: string;
       SKU?: string;
       ExternalIdentifier?: string;
-      SearchMode: SumitCustomerSearchMode;
+      SearchMode: SumitIncomeItemSearchModeAutomatic;
     };
   }>;
   Payments?: never[];
@@ -378,15 +400,20 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
   }
   const vatIncluded = requireVatIncluded("buildCreateDocumentPayload", params.vatIncluded);
 
-  // Derive SearchMode: if the caller didn't pick one, use 1 (find by SUMIT ID)
-  // when an `id` is supplied, 2 (upsert by ExternalIdentifier) when one is
-  // supplied, and 0 (create new) otherwise. Matches SUMIT's documented modes.
+  // If the caller didn't pick a SearchMode: None when an `id` is supplied
+  // (SUMIT takes the customer from `ID`, no search needed), ExternalIdentifier
+  // when one is supplied, Automatic otherwise.
   // Derived from the blank-stripped values so a whitespace-only `id` cannot select
-  // mode 1 while `compact` drops the `ID` field from the payload.
-  const customerId = blankToUndefined(params.customer.id);
+  // None while `compact` drops the `ID` field from the payload.
+  const customerId = toCustomerId(params.customer.id);
   const customerExternalIdentifier = blankToUndefined(params.customer.externalIdentifier);
   const derivedSearchMode: SumitCustomerSearchMode =
-    params.customer.searchMode ?? (customerId ? 1 : customerExternalIdentifier ? 2 : 0);
+    params.customer.searchMode ??
+    (customerId !== undefined
+      ? SUMIT_CUSTOMER_SEARCH_MODE.None
+      : customerExternalIdentifier
+        ? SUMIT_CUSTOMER_SEARCH_MODE.ExternalIdentifier
+        : SUMIT_CUSTOMER_SEARCH_MODE.Automatic);
 
   const customer = compact({
     SearchMode: derivedSearchMode,
@@ -436,7 +463,7 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
         Description: blankToUndefined(item.description),
         SKU: blankToUndefined(item.sku),
         ExternalIdentifier: blankToUndefined(item.externalIdentifier),
-        SearchMode: 0 as SumitCustomerSearchMode,
+        SearchMode: 0 as SumitIncomeItemSearchModeAutomatic,
       }) as SumitCreateDocumentPayload["Items"][number]["Item"],
     };
   });
@@ -450,6 +477,25 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
     VATRate: params.vatRate,
     ResponseLanguage: toLanguageCode(params.responseLanguage),
   }) as SumitCreateDocumentPayload;
+}
+
+// SUMIT types Customer.ID as int64. A string that is not a plain positive
+// integer would be sent as-is and either fail or address nothing, so it is
+// rejected here instead.
+function toCustomerId(value: number | string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return undefined;
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error("buildCreateDocumentPayload: customer.id must be the numeric SUMIT customer ID");
+    }
+    value = Number(trimmed);
+  }
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error("buildCreateDocumentPayload: customer.id must be the numeric SUMIT customer ID");
+  }
+  return value;
 }
 
 function toLanguageCode(value: number | string | undefined): number | undefined {

@@ -125,7 +125,7 @@ Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / 
   Details: {
     Type: number,            // SUMIT document type code; 3 = חשבון עסקה (ProformaInvoice)
     Customer: {
-      SearchMode: 0 | 1 | 2, // 0 = match by ID (default for this endpoint)
+      SearchMode: 0 | 1 | 2 | 3 | 4 | 5 | 6, // see "Customer SearchMode" below
       Name: string,
       EmailAddress?: string,
       Phone?: string,
@@ -208,13 +208,17 @@ View-shaped triggers still normalize as `eventType: "sumit.trigger.unmapped"` un
 
 | Code | Mode | Notes |
 | --- | --- | --- |
-| 0 | Automatic | SUMIT chooses heuristically. |
-| 1 | None | Always create new customer. |
-| 2 | ExternalIdentifier | Used by this library. |
+| 0 | Automatic | SUMIT decides how to match. Its schema does not say how. |
+| 1 | None | No search. With `Customer.ID`, SUMIT uses that customer (seen against the live API, 2026-10-12). SUMIT's schema says an empty `ID` creates a new customer. The schema's default. |
+| 2 | ExternalIdentifier | Lookup by `ExternalIdentifier`. The charge builders always send this. |
 | 3 | Name | Lookup by name. |
 | 4 | CompanyNumber | Lookup by company number. |
 | 5 | Phone | Lookup by phone. |
 | 6 | EmailAddress | Lookup by email. |
+
+Source: `Accounting_Typed_CustomerSearchMode` in SUMIT's published schema. Exported as `SUMIT_CUSTOMER_SEARCH_MODE`.
+
+`buildCreateDocumentPayload` derives the mode when the caller does not set one: `None` with a customer `id`, `ExternalIdentifier` with an external identifier, `Automatic` otherwise. `Customer.ID` is an integer in SUMIT's schema; the builder accepts a number or a numeric string, sends a number, and throws on anything else.
 
 ## Currency
 
