@@ -110,7 +110,7 @@ Notes:
 
 - `SearchMode: 2` means lookup by `ExternalIdentifier`.
 - `Currency`: `0=ILS`, `1=USD`, `2=EUR`.
-- `VATIncluded` is a product decision. If true, the submitted price is gross/total; if false, SUMIT can add VAT on top.
+- `VATIncluded` is a product decision. If true, the submitted price is gross/total; if false, SUMIT adds VAT on top. SUMIT's published schema says an omitted `VATIncluded` means `false`. The builders in this package require `vatIncluded` and throw without it, on all three endpoints, so the amount is never decided by a default.
 - `AuthoriseOnly: true` is useful for integration sanity checks, but it is not proof of a live recurring subscription.
 
 Successful payloads observed in smoke tests include `Payment.ValidPayment === true`, `Payment.Status === "000"`, `Payment.ID`, `CustomerID`, `DocumentID`, and `RecurringCustomerItemIDs[0]`.

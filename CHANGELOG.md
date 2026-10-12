@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** `vatIncluded` is now required in `buildOneOffChargePayload`, `buildRecurringChargePayload` and `buildCreateDocumentPayload`, and the builders throw when it is not a boolean. Before, an omitted flag was sent as `VATIncluded: true`, the opposite of SUMIT's own default (its published schema: "Leave empty for false"). A caller that followed SUMIT's documentation, passed net prices and left the flag out got a document or a charge whose total left the VAT out, with no error. To keep the previous behaviour, pass `vatIncluded: true`; if your prices are net, pass `vatIncluded: false`.
+
 ## [0.4.1] - 2026-07-03
 
 ### Fixed
