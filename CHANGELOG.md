@@ -6,7 +6,7 @@ All notable changes to this package are documented in this file. The format is b
 
 ### Security
 
-- `redactSensitiveText` no longer takes quadratic time on a long run of email-local-part characters with no `@` (CodeQL `js/polynomial-redos`). The email pattern now starts a match only at the beginning of a run. 50,000 `+` characters took about 1.6 s before; now well under the test's 500 ms bound. Output is unchanged.
+- `redactSensitiveText` no longer takes quadratic time on a long run of email-local-part characters with no `@` (CodeQL `js/polynomial-redos`). The email pattern now caps the local part at 64 characters, the RFC 5321 limit. 50,000 `+` characters took about 1.6 s before; now well under the test's 500 ms bound. Output is unchanged.
 - CI runs with `contents: read` only (CodeQL `actions/missing-workflow-permissions`).
 
 ## [0.5.0] - 2026-10-12
