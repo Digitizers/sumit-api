@@ -8,6 +8,7 @@ import {
   normalizeCreateDocumentResponse,
   normalizeRecurringChargeResponse,
   normalizeSumitIncomingPayload,
+  redactSensitiveText,
   redactSumitPayload,
   SUMIT_CUSTOMER_SEARCH_MODE,
   SUMIT_DOCUMENT_TYPE,
@@ -769,6 +770,15 @@ describe("@deepclaw/sumit", () => {
     const redacted = redactSumitPayload(payload) as { Credentials: { APIKey: string }; Details: { Customer: { EmailAddress?: string } } };
     expect(redacted.Credentials.APIKey).toBe("[REDACTED]");
     expect(redacted.Details.Customer.EmailAddress).toBe("[REDACTED]");
+  });
+
+  it("redacts emails in free text and stays fast on long runs without an @", () => {
+    expect(redactSensitiveText("contact a.b+c@example.invalid now")).toBe("contact [REDACTED] now");
+    expect(redactSensitiveText("first@example.invalid+second@example.invalid")).toBe("[REDACTED][REDACTED]");
+    const hostile = "+".repeat(50_000);
+    const started = Date.now();
+    expect(redactSensitiveText(hostile)).toBe(hostile);
+    expect(Date.now() - started).toBeLessThan(500);
   });
 
   it("currencyToSumitString maps codes and labels", () => {
