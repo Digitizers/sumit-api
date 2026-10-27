@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- `redactSensitiveText` no longer takes quadratic time on a long run of email-local-part characters with no `@` (CodeQL `js/polynomial-redos`). The email pattern now starts a match only at the beginning of a run. 50,000 `+` characters took about 1.6 s before; now well under the test's 500 ms bound. Output is unchanged.
+- CI runs with `contents: read` only (CodeQL `actions/missing-workflow-permissions`).
+
 ## [0.5.0] - 2026-10-12
 
 ### Changed

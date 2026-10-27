@@ -703,7 +703,9 @@ function redactValue(value: unknown, key = ""): unknown {
 
 export function redactSensitiveText(value: string): string {
   return value
-    .replace(/[\w.+-]+@[\w.-]+/g, "[REDACTED]")
+    // The lookbehind anchors each match at the start of a run, so a long run of
+    // local-part characters with no "@" is scanned once instead of once per offset.
+    .replace(/(?<![\w.+-])[\w.+-]+@[\w.-]+/g, "[REDACTED]")
     .replace(/(כרטיס\s+אשראי|credit\s+card)\s*\(\s*\d{4}\s*\)/gi, "$1 ([REDACTED])")
     .replace(/(singleuse)?token\s*[:=]\s*[^\s;,]+/gi, "$1token=[REDACTED]")
     .replace(/api\s*key\s*[:=]\s*[^\s;,]+/gi, "api key=[REDACTED]")
