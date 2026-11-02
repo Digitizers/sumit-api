@@ -4,6 +4,8 @@ All notable changes to this package are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-02
+
 ### Changed
 
 - **Breaking:** `buildCreateDocumentPayload` sends `items[].description` as the line's `Items[].Description` instead of `Items[].Item.Description`. SUMIT treated the item description as part of the catalog item, so every new line text created a duplicate income item (#34). The text now prints on the line, as in documents made in the SUMIT UI. A caller who meant to set the catalog item's own description should edit the item in SUMIT.
