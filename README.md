@@ -147,6 +147,8 @@ const payload = buildCreateDocumentPayload({
 
 `customer.searchMode` takes a value of `SUMIT_CUSTOMER_SEARCH_MODE` (SUMIT's `Accounting_Typed_CustomerSearchMode`: `Automatic` 0, `None` 1, `ExternalIdentifier` 2, `Name` 3, `CompanyNumber` 4, `Phone` 5, `EmailAddress` 6). When omitted it is derived: `None` with a SUMIT `id` (SUMIT takes the customer from the ID, no search), `ExternalIdentifier` with an external identifier, `Automatic` otherwise. Pass an explicit value to override.
 
+`items[].description` is printed on the document line. `items[].itemId` uses an existing income item from the SUMIT catalog by its ID, so no new item is created. `openingText` and `closingText` (or `openingTextHtml` / `closingTextHtml`) fill the free text above and below the lines.
+
 `customer.id` is the numeric SUMIT customer ID. A number or a numeric string is accepted and sent as a number, which is what SUMIT's schema asks for; anything else throws.
 
 ---

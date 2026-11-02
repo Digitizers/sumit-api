@@ -444,7 +444,8 @@ describe("@deepclaw/sumit", () => {
           Quantity: 1,
           UnitPrice: 1500,
           TotalPrice: 1500,
-          Item: { Name: "עיצוב לוגו", Description: "כולל 3 סבבי תיקונים", SearchMode: 0 },
+          Description: "כולל 3 סבבי תיקונים",
+          Item: { Name: "עיצוב לוגו", SearchMode: 0 },
         },
         {
           Quantity: 8,
@@ -455,6 +456,96 @@ describe("@deepclaw/sumit", () => {
       ],
       VATIncluded: false,
     });
+  });
+
+  it("puts the line description on the document line, never on the catalog item", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      vatIncluded: true,
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "WordPress Development", description: "August hours", unitPrice: 250 }],
+    });
+    expect(payload.Items[0].Description).toBe("August hours");
+    expect(payload.Items[0].Item).toEqual({ Name: "WordPress Development", SearchMode: 0 });
+  });
+
+  it("uses an existing income item by ID with SearchMode None", () => {
+    const payload = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      vatIncluded: true,
+      documentType: 3,
+      customer: { name: "C" },
+      items: [
+        { name: "WordPress Development", itemId: "98269625", description: "Aug", unitPrice: 250 },
+        { name: "Other", itemId: 5, unitPrice: 1 },
+      ],
+    });
+    expect(payload.Items[0].Item).toEqual({ ID: 98269625, Name: "WordPress Development", SearchMode: 1 });
+    expect(payload.Items[0].Description).toBe("Aug");
+    expect(payload.Items[1].Item).toEqual({ ID: 5, Name: "Other", SearchMode: 1 });
+  });
+
+  it("rejects an itemId that is not a positive integer", () => {
+    for (const itemId of ["abc", "1.5", -3, 0]) {
+      expect(() =>
+        buildCreateDocumentPayload({
+          companyId: 1,
+          apiKey: "k",
+          vatIncluded: true,
+          documentType: 3,
+          customer: { name: "C" },
+          items: [{ name: "I", itemId, unitPrice: 1 }],
+        }),
+      ).toThrow(/itemId/);
+    }
+  });
+
+  it("maps the opening and closing text, plain or HTML", () => {
+    const plain = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      vatIncluded: true,
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "I", unitPrice: 1 }],
+      openingText: "Hours for August to October",
+      closingText: "Time tracker: https://example.invalid/t\nPayment by bank transfer",
+    });
+    expect(plain.Details.OpeningText).toBe("Hours for August to October");
+    expect(plain.Details.ClosingText).toBe("Time tracker: https://example.invalid/t\nPayment by bank transfer");
+    expect("OpeningTextHTML" in plain.Details).toBe(false);
+
+    const html = buildCreateDocumentPayload({
+      companyId: 1,
+      apiKey: "k",
+      vatIncluded: true,
+      documentType: 3,
+      customer: { name: "C" },
+      items: [{ name: "I", unitPrice: 1 }],
+      openingTextHtml: "  ",
+      closingTextHtml: "<p>Thanks</p>",
+    });
+    expect(html.Details.ClosingTextHTML).toBe("<p>Thanks</p>");
+    expect("OpeningTextHTML" in html.Details).toBe(false);
+    expect("ClosingText" in html.Details).toBe(false);
+  });
+
+  it("refuses plain and HTML text for the same position", () => {
+    expect(() =>
+      buildCreateDocumentPayload({
+        companyId: 1,
+        apiKey: "k",
+        vatIncluded: true,
+        documentType: 3,
+        customer: { name: "C" },
+        items: [{ name: "I", unitPrice: 1 }],
+        closingText: "a",
+        closingTextHtml: "<p>a</p>",
+      }),
+    ).toThrow(/closingText or closingTextHtml/);
   });
 
   it("omits Payments key entirely (SUMIT rejects empty Payments arrays on document creation)", () => {

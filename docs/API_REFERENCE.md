@@ -141,6 +141,8 @@ Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / 
     Language?: number,        // Accounting_Typed_Language enum: 0=Hebrew, 1=English, 2=Arabic, 3=Spanish
     Currency?: "ILS" | "USD" | "EUR",
     Description?: string,
+    OpeningText?: string,     // "תוכן פותח"; or OpeningTextHTML, not both
+    ClosingText?: string,     // "תוכן סוגר"; or ClosingTextHTML, not both
     ExternalReference?: string,
     Date?: string,            // ISO date
     DueDate?: string,
@@ -151,12 +153,13 @@ Issues a SUMIT accounting document (חשבון עסקה / חשבונית מס / 
     UnitPrice: number,
     TotalPrice: number,       // defaults to UnitPrice * Quantity
     VAT?: number,             // optional per-line override
+    Description?: string,     // text printed on this line (from items[].description)
     Item: {
+      ID?: number,            // existing income item (from items[].itemId)
       Name: string,
-      Description?: string,
       SKU?: string,
       ExternalIdentifier?: string,
-      SearchMode: 0 | 1 | 2,
+      SearchMode: 0 | 1,      // 1 (None) with ID, 0 (Automatic) otherwise
     },
   }],
   // Payments omitted — SUMIT rejects empty Payments arrays on document creation.
@@ -172,6 +175,9 @@ Notes:
 - Unlike the charge endpoints, the documents endpoint takes `Currency` as the literal string code (`"ILS"` / `"USD"` / `"EUR"`), not the numeric code. The helper `currencyToSumitString` handles the mapping.
 - `Payments: []` for a חשבון עסקה — no payment has been collected yet. Use a different document type (e.g. חשבונית מס-קבלה) and a populated `Payments[]` to record an actual payment.
 - Successful responses surface `Data.DocumentID`, `Data.DocumentNumber`, and (when SUMIT generates one) `Data.DocumentDownloadURL`. Pass the response to `normalizeCreateDocumentResponse` to extract these as `document.created`.
+- `items[].description` goes to the line's `Description`, not to `Item.Description`. SUMIT treats `Item.Description` as part of the catalog item, so a new description on a line used to create a new income item.
+- `items[].itemId` points the line at an existing income item (`Item.ID` with `SearchMode` 1, None). Without it SUMIT searches the catalog automatically.
+- `openingText` / `closingText` fill the free text above and below the lines. The `...Html` variants send `OpeningTextHTML` / `ClosingTextHTML`; giving both forms for one position throws.
 - A failed response surfaces as `document.failed` with redacted `userErrorMessage` / `technicalErrorDetails`.
 
 ## Related endpoints not wrapped directly
