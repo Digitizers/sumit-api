@@ -189,7 +189,13 @@ export interface NormalizedSumitEvent {
 
 export interface CreateDocumentItem {
   name: string;
+  // Text printed on this document line (`Items[].Description`). It is not
+  // sent to the catalog item, so it never creates a new income item.
   description?: string;
+  // SUMIT ID of an existing income item. When set, the line uses that catalog
+  // item (`SearchMode: None`) and `name`, `sku` and `externalIdentifier` are
+  // not used to look it up. A numeric string is converted.
+  itemId?: number | string;
   unitPrice: number;
   quantity?: number;
   // Optional override; defaults to unitPrice * quantity.
@@ -251,6 +257,12 @@ export interface BuildCreateDocumentPayloadParams {
   // full English names) and converts them. Unknown strings are dropped.
   language?: number | "he" | "en" | "ar" | "es" | string;
   description?: string;
+  // Free text above and below the document lines ("תוכן פותח" / "תוכן סוגר"
+  // in the SUMIT UI). Give either the plain-text or the HTML field, not both.
+  openingText?: string;
+  openingTextHtml?: string;
+  closingText?: string;
+  closingTextHtml?: string;
   externalReference?: string;
   date?: string;
   dueDate?: string;
@@ -278,9 +290,10 @@ export const SUMIT_CUSTOMER_SEARCH_MODE = {
 
 export type SumitCustomerSearchMode = (typeof SUMIT_CUSTOMER_SEARCH_MODE)[keyof typeof SUMIT_CUSTOMER_SEARCH_MODE];
 
-// Income items have their own search-mode enum in SUMIT's schema; the builder
-// only ever sends Automatic.
-type SumitIncomeItemSearchModeAutomatic = 0;
+// Income items have their own search-mode enum in SUMIT's schema
+// (`Accounting_Typed_IncomeItemSearchMode`). The builder sends Automatic (0),
+// or None (1) when the caller gives an existing item's ID.
+type SumitIncomeItemSearchMode = 0 | 1;
 
 export interface SumitCreateDocumentPayload {
   Credentials: { CompanyID: number; APIKey: string };
@@ -307,6 +320,10 @@ export interface SumitCreateDocumentPayload {
     Language?: number;
     Currency?: "ILS" | "USD" | "EUR" | string;
     Description?: string;
+    OpeningText?: string;
+    OpeningTextHTML?: string;
+    ClosingText?: string;
+    ClosingTextHTML?: string;
     ExternalReference?: string;
     Date?: string;
     DueDate?: string;
@@ -317,12 +334,13 @@ export interface SumitCreateDocumentPayload {
     UnitPrice: number;
     TotalPrice: number;
     VAT?: number;
+    Description?: string;
     Item: {
+      ID?: number;
       Name: string;
-      Description?: string;
       SKU?: string;
       ExternalIdentifier?: string;
-      SearchMode: SumitIncomeItemSearchModeAutomatic;
+      SearchMode: SumitIncomeItemSearchMode;
     };
   }>;
   Payments?: never[];
@@ -444,6 +462,8 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
     Language: toLanguageCode(params.language),
     Currency: params.currency ? currencyToSumitString(params.currency) : undefined,
     Description: blankToUndefined(params.description),
+    ...documentText("Opening", params.openingText, params.openingTextHtml),
+    ...documentText("Closing", params.closingText, params.closingTextHtml),
     ExternalReference: blankToUndefined(params.externalReference),
     Date: blankToUndefined(params.date),
     DueDate: blankToUndefined(params.dueDate),
@@ -453,17 +473,20 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
   const items: SumitCreateDocumentPayload["Items"] = params.items.map((item) => {
     const quantity = item.quantity ?? 1;
     const totalPrice = item.totalPrice ?? round2(item.unitPrice * quantity);
+    const itemId = toPositiveId(item.itemId, "items[].itemId must be the numeric SUMIT income item ID");
+    const lineDescription = blankToUndefined(item.description);
     return {
       Quantity: quantity,
       UnitPrice: item.unitPrice,
       TotalPrice: totalPrice,
       ...(item.vat !== undefined ? { VAT: item.vat } : {}),
+      ...(lineDescription !== undefined ? { Description: lineDescription } : {}),
       Item: compact({
+        ID: itemId,
         Name: item.name,
-        Description: blankToUndefined(item.description),
         SKU: blankToUndefined(item.sku),
         ExternalIdentifier: blankToUndefined(item.externalIdentifier),
-        SearchMode: 0 as SumitIncomeItemSearchModeAutomatic,
+        SearchMode: (itemId !== undefined ? 1 : 0) as SumitIncomeItemSearchMode,
       }) as SumitCreateDocumentPayload["Items"][number]["Item"],
     };
   });
@@ -483,19 +506,41 @@ export function buildCreateDocumentPayload(params: BuildCreateDocumentPayloadPar
 // integer would be sent as-is and either fail or address nothing, so it is
 // rejected here instead.
 function toCustomerId(value: number | string | undefined): number | undefined {
+  return toPositiveId(value, "customer.id must be the numeric SUMIT customer ID");
+}
+
+function toPositiveId(value: number | string | undefined, message: string): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed === "") return undefined;
     if (!/^\d+$/.test(trimmed)) {
-      throw new Error("buildCreateDocumentPayload: customer.id must be the numeric SUMIT customer ID");
+      throw new Error(`buildCreateDocumentPayload: ${message}`);
     }
     value = Number(trimmed);
   }
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error("buildCreateDocumentPayload: customer.id must be the numeric SUMIT customer ID");
+    throw new Error(`buildCreateDocumentPayload: ${message}`);
   }
   return value;
+}
+
+// SUMIT takes either the plain-text or the HTML form of the opening and
+// closing text ("Specify Either ... or ...HTML"), so both together is refused.
+function documentText(
+  position: "Opening" | "Closing",
+  text: string | undefined,
+  html: string | undefined,
+): Record<string, string> {
+  const plain = blankToUndefined(text);
+  const markup = blankToUndefined(html);
+  const field = position === "Opening" ? "openingText" : "closingText";
+  if (plain !== undefined && markup !== undefined) {
+    throw new Error(`buildCreateDocumentPayload: give ${field} or ${field}Html, not both`);
+  }
+  if (plain !== undefined) return { [`${position}Text`]: plain };
+  if (markup !== undefined) return { [`${position}TextHTML`]: markup };
+  return {};
 }
 
 function toLanguageCode(value: number | string | undefined): number | undefined {

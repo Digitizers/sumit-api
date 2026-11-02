@@ -4,6 +4,15 @@ All notable changes to this package are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `buildCreateDocumentPayload` sends `items[].description` as the line's `Items[].Description` instead of `Items[].Item.Description`. SUMIT treated the item description as part of the catalog item, so every new line text created a duplicate income item (#34). The text now prints on the line, as in documents made in the SUMIT UI. A caller who meant to set the catalog item's own description should edit the item in SUMIT.
+
+### Added
+
+- `items[].itemId`: the SUMIT ID of an existing income item. Sent as `Item.ID` with income-item `SearchMode` 1 (None), so the line uses that item without a catalog search (#34).
+- `openingText`, `closingText`, `openingTextHtml` and `closingTextHtml` on `buildCreateDocumentPayload`, sent as `Details.OpeningText`, `ClosingText`, `OpeningTextHTML` and `ClosingTextHTML` per SUMIT's `Accounting_Typed_DocumentDetails`. Giving both the plain and the HTML form for one position throws (#35).
+
 ### Security
 
 - `redactSensitiveText` no longer takes quadratic time on a long run of email-local-part characters with no `@` (CodeQL `js/polynomial-redos`). The email pattern now caps the local part at 64 characters, the RFC 5321 limit. 50,000 `+` characters took about 1.6 s before; now well under the test's 500 ms bound. Output is unchanged.
